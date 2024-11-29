@@ -32,9 +32,8 @@ class StationAdapter(
     fun updatePlaybackState(isPlaying: Boolean, station: String?) {
         station?.let {
             this.isPlaying[it] = isPlaying
-            val position = stations.indexOf(it)
-            if (position != -1) {
-                notifyItemChanged(position) // Обновляем только измененный элемент
+            if (stations.indexOf(it) != -1) {
+                notifyItemChanged(stations.indexOf(it)) // Обновляем только измененный элемент
             }
         }
     }
