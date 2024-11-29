@@ -29,11 +29,14 @@ class AudioService : Service() {
             setOnPreparedListener { start() }
         }
         isPlaying = true
+        currentStation = station
+        showNotification() // Обновляем уведомление
     }
 
     private fun pauseStream() {
         mediaPlayer.pause()
         isPlaying = false
+        showNotification() // Обновляем уведомление
     }
 
     private fun showNotification() {
@@ -42,7 +45,7 @@ class AudioService : Service() {
             this,
             0,
             notificationIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
         // Создание Intent для кнопки Play/Pause
@@ -51,7 +54,7 @@ class AudioService : Service() {
             putExtra("STATION_NAME", currentStation) // Убедитесь, что передаете текущую станцию
         }
         val playPausePendingIntent =
-            PendingIntent.getService(this, 0, playPauseIntent, PendingIntent.FLAG_UPDATE_CURRENT)
+            PendingIntent.getService(this, 0, playPauseIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
         val notification = NotificationCompat.Builder(this, "AUDIO_CHANNEL")
             .setContentTitle(currentStation)
@@ -82,7 +85,6 @@ class AudioService : Service() {
         }
     }
 
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         currentStation = intent?.getStringExtra("STATION_NAME")
 
@@ -104,7 +106,6 @@ class AudioService : Service() {
                         false,
                         currentStation
                     ) // Обновляем состояние
-                    showNotification() // Обновляем уведомление
                 }
             }
 
@@ -114,22 +115,22 @@ class AudioService : Service() {
                     false,
                     null
                 ) // Обновляем состояние
-                showNotification() // Обновляем уведомление
             }
 
             else -> {
-                playStream(currentStation!!)
-                (application as MyApplication).mainActivity?.updatePlaybackState(
-                    true,
-                    currentStation
-                ) // Обновляем состояние
+                if (currentStation != null) {
+                    playStream(currentStation!!)
+                    (application as MyApplication).mainActivity?.updatePlaybackState(
+                        true,
+                        currentStation
+                    ) // Обновляем состояние
+                }
             }
         }
 
-        showNotification()
+        showNotification() // Обновляем уведомление
         return START_STICKY
     }
-
 
     override fun onBind(intent: Intent?): IBinder? {
         return null
