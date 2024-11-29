@@ -83,7 +83,7 @@ class StationAdapter(
     // DiffUtil для эффективного обновления элементов списка
     class StationDiffCallback : DiffUtil.ItemCallback<String>() {
         override fun areItemsTheSame(oldItem: String, newItem: String): Boolean {
-            return oldItem == newItem
+            return oldItem === newItem
         }
 
         override fun areContentsTheSame(oldItem: String, newItem: String): Boolean {
