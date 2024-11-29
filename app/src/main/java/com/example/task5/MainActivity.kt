@@ -42,19 +42,20 @@ class MainActivity : AppCompatActivity() {
             // Если какая-то радиостанция играет, то ставим на паузу
             pauseAllStations()
         } else {
-            // Если ничего не играет, то запускаем последнюю игравшую радиостанцию или первую
-            val stationToPlay = lastPlayedStation ?: stations.first()
-            playStation(stationToPlay)
+            // Если ничего не играет
+            if (lastPlayedStation != null) {
+                // Запускаем последнюю игравшую радиостанцию
+                playStation(lastPlayedStation!!)
+            } else {
+                // Запускаем первую радиостанцию из списка
+                playStation(stations.first())
+            }
         }
     }
 
     fun updatePlaybackState(isPlaying: Boolean, station: String?) {
         playPauseButton.setImageResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
-        if (isPlaying) {
-            lastPlayedStation = station // Сохраняем последнюю игравшую радиостанцию
-        } else {
-            lastPlayedStation = null // Сбрасываем, если ничего не играет
-        }
+        lastPlayedStation = if (isPlaying) station else lastPlayedStation // Сохраняем последнюю игравшую радиостанцию
         stationAdapter.updatePlaybackState(isPlaying, station) // Обновляем состояние в адаптере
     }
 

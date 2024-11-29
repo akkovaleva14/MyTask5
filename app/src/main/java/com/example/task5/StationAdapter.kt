@@ -48,6 +48,11 @@ class StationAdapter(
         }
         context.startService(intent)
         isPlaying[station] = !isPlaying[station]!!
+
+        // Обновляем состояние нижней кнопки в MainActivity
+        val isAnyStationPlaying = isPlaying.values.any { it }
+        val lastStation = if (isAnyStationPlaying) station else null
+        (context as MainActivity).updatePlaybackState(isAnyStationPlaying, lastStation)
     }
 
     fun updatePlaybackState(isPlaying: Boolean, station: String?) {
@@ -56,7 +61,6 @@ class StationAdapter(
         }
         notifyDataSetChanged() // Обновляем весь адаптер
     }
-
 
     fun isAnyStationPlaying(): Boolean {
         return isPlaying.values.any { it }
