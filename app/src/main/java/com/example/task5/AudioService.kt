@@ -4,6 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.media.MediaPlayer
 import android.os.Build
@@ -30,12 +31,14 @@ class AudioService : Service() {
         }
         isPlaying = true
         currentStation = station
+        savePlaybackState(true) // Сохраняем состояние
         showNotification() // Обновляем уведомление
     }
 
     private fun pauseStream() {
         mediaPlayer.pause()
         isPlaying = false
+        savePlaybackState(false) // Сохраняем состояние
         showNotification() // Обновляем уведомление
     }
 
@@ -70,6 +73,14 @@ class AudioService : Service() {
             .build()
 
         notificationManager.notify(1, notification)
+
+        // Отправляем обновление состояния
+            // TODO
+        val intent = Intent("UPDATE_PLAYBACK_STATE").apply {
+            putExtra("isPlaying", isPlaying)
+            putExtra("currentStation", currentStation)
+        }
+        sendBroadcast(intent)
     }
 
     private fun createNotificationChannel() {
@@ -131,6 +142,16 @@ class AudioService : Service() {
         showNotification() // Обновляем уведомление
         return START_STICKY
     }
+
+    private fun savePlaybackState(isPlaying: Boolean) {
+        val sharedPreferences = getSharedPreferences("AudioPrefs", Context.MODE_PRIVATE)
+        with(sharedPreferences.edit()) {
+            putBoolean("isPlaying", isPlaying)
+            putString("currentStation", currentStation)
+            apply()
+        }
+    }
+
 
     override fun onBind(intent: Intent?): IBinder? {
         return null

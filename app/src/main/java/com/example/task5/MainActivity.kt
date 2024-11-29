@@ -1,6 +1,8 @@
 package com.example.task5
 
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -21,6 +23,7 @@ class MainActivity : AppCompatActivity() {
     )
     private lateinit var playPauseButton: ImageButton
     private var lastPlayedStation: String? = null
+    private lateinit var playbackReceiver: PlaybackReceiver
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,6 +38,9 @@ class MainActivity : AppCompatActivity() {
         playPauseButton.setOnClickListener {
             handlePlayPauseButtonClick()
         }
+        playbackReceiver = PlaybackReceiver()
+        val filter = IntentFilter("UPDATE_PLAYBACK_STATE")
+        registerReceiver(playbackReceiver, filter)
     }
 
     private fun handlePlayPauseButtonClick() {
@@ -75,4 +81,26 @@ class MainActivity : AppCompatActivity() {
         startService(intent)
         updatePlaybackState(true, station)
     }
+
+    override fun onResume() {
+        super.onResume()
+        updateUIFromPreferences() // Обновляем UI из SharedPreferences
+    }
+
+    private fun updateUIFromPreferences() {
+        val sharedPreferences = getSharedPreferences("AudioPrefs", Context.MODE_PRIVATE)
+        val isPlaying = sharedPreferences.getBoolean("isPlaying", false)
+        val currentStation = sharedPreferences.getString("currentStation", null)
+
+        // Обновите состояние кнопки
+        playPauseButton.setImageResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
+        lastPlayedStation = currentStation // Обновите последнюю станцию
+        stationAdapter.updatePlaybackState(isPlaying, currentStation) // Обновите адаптер
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        unregisterReceiver(playbackReceiver) // Отменяем регистрацию при уничтожении
+    }
+
 }

@@ -25,6 +25,13 @@ class StationAdapter(
         return StationViewHolder(view)
     }
 
+     fun updatePlaybackState(isPlaying: Boolean, station: String?) {
+        stations.forEach { s ->
+            this.isPlaying[s] = (s == station) && isPlaying // Обновляем только текущую радиостанцию
+        }
+        notifyDataSetChanged() // Обновляем весь адаптер
+    }
+
     override fun onBindViewHolder(holder: StationViewHolder, position: Int) {
         val station = stations[position]
         holder.stationName.text = station
@@ -55,12 +62,6 @@ class StationAdapter(
         (context as MainActivity).updatePlaybackState(isAnyStationPlaying, lastStation)
     }
 
-    fun updatePlaybackState(isPlaying: Boolean, station: String?) {
-        stations.forEach { s ->
-            this.isPlaying[s] = (s == station) && isPlaying // Обновляем только текущую радиостанцию
-        }
-        notifyDataSetChanged() // Обновляем весь адаптер
-    }
 
     fun isAnyStationPlaying(): Boolean {
         return isPlaying.values.any { it }
