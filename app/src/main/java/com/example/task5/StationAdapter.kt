@@ -40,8 +40,7 @@ class StationAdapter(
     }
 
     override fun onBindViewHolder(holder: StationViewHolder, position: Int) {
-        val station = stations[position]
-        holder.bind(station, isPlaying[station] == true)
+        holder.bind(stations[position], isPlaying[stations[position]] == true)
     }
 
     override fun getItemCount(): Int = stations.size
