@@ -61,7 +61,8 @@ class MainActivity : AppCompatActivity() {
 
     fun updatePlaybackState(isPlaying: Boolean, station: String?) {
         playPauseButton.setImageResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
-        lastPlayedStation = if (isPlaying) station else lastPlayedStation // Сохраняем последнюю игравшую радиостанцию
+        lastPlayedStation =
+            if (isPlaying) station else lastPlayedStation // Сохраняем последнюю игравшую радиостанцию
         stationAdapter.updatePlaybackState(isPlaying, station) // Обновляем состояние в адаптере
     }
 
@@ -76,7 +77,8 @@ class MainActivity : AppCompatActivity() {
     private fun playStation(station: String) {
         val intent = Intent(this, AudioService::class.java).apply {
             putExtra("STATION_NAME", station)
-            action = "PLAY"
+//            action = "PLAY"
+            action = "PREPARE_AND_PLAY"
         }
         startService(intent)
         updatePlaybackState(true, station)
@@ -95,7 +97,6 @@ class MainActivity : AppCompatActivity() {
         // Обновите состояние кнопки
         playPauseButton.setImageResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
         lastPlayedStation = currentStation // Обновите последнюю станцию
-        stationAdapter.updatePlaybackState(isPlaying, currentStation) // Обновите адаптер
     }
 
     override fun onDestroy() {

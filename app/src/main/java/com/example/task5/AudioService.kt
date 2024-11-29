@@ -36,11 +36,23 @@ class AudioService : Service() {
     }
 
     private fun pauseStream() {
-        mediaPlayer.pause()
-        isPlaying = false
-        savePlaybackState(false) // Сохраняем состояние
-        showNotification() // Обновляем уведомление
+        if (::mediaPlayer.isInitialized && isPlaying) {
+            mediaPlayer.pause()
+            isPlaying = false
+            savePlaybackState(false)
+            showNotification()
+            sendPlaybackStateUpdate() // Передача состояния
+        }
     }
+
+    private fun sendPlaybackStateUpdate() {
+        val intent = Intent("UPDATE_PLAYBACK_STATE").apply {
+            putExtra("isPlaying", isPlaying)
+            putExtra("currentStation", currentStation)
+        }
+        sendBroadcast(intent)
+    }
+
 
     private fun showNotification() {
         val notificationIntent = Intent(this, MainActivity::class.java)
@@ -57,7 +69,12 @@ class AudioService : Service() {
             putExtra("STATION_NAME", currentStation) // Убедитесь, что передаете текущую станцию
         }
         val playPausePendingIntent =
-            PendingIntent.getService(this, 0, playPauseIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            PendingIntent.getService(
+                this,
+                0,
+                playPauseIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
 
         val notification = NotificationCompat.Builder(this, "AUDIO_CHANNEL")
             .setContentTitle(currentStation)
@@ -75,7 +92,7 @@ class AudioService : Service() {
         notificationManager.notify(1, notification)
 
         // Отправляем обновление состояния
-            // TODO
+        // TODO
         val intent = Intent("UPDATE_PLAYBACK_STATE").apply {
             putExtra("isPlaying", isPlaying)
             putExtra("currentStation", currentStation)
@@ -151,7 +168,6 @@ class AudioService : Service() {
             apply()
         }
     }
-
 
     override fun onBind(intent: Intent?): IBinder? {
         return null
