@@ -9,7 +9,12 @@ import android.content.Intent
 import android.media.MediaPlayer
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class AudioService : Service() {
     private lateinit var mediaPlayer: MediaPlayer
@@ -24,16 +29,24 @@ class AudioService : Service() {
     }
 
     private fun playStream(station: String) {
-        mediaPlayer = MediaPlayer().apply {
-            setDataSource(station) // Укажите URL потока
-            prepareAsync()
-            setOnPreparedListener { start() }
+        CoroutineScope(Dispatchers.IO).launch {
+            val startTime = System.currentTimeMillis()
+            mediaPlayer = MediaPlayer().apply {
+                setDataSource(station) // Укажите URL потока
+                setOnPreparedListener {
+                    this@AudioService.isPlaying = true
+                    currentStation = station
+                    val endTime = System.currentTimeMillis()
+                    Log.d("AudioService", "Preparation time: ${endTime - startTime} ms")
+                    start()
+                    savePlaybackState(true) // Сохраняем состояние
+                    showNotification() // Обновляем уведомление
+                }
+                prepareAsync() // Подготовка к воспроизведению
+            }
         }
-        isPlaying = true
-        currentStation = station
-        savePlaybackState(true) // Сохраняем состояние
-        showNotification() // Обновляем уведомление
     }
+
 
     private fun pauseStream() {
         if (::mediaPlayer.isInitialized && isPlaying) {
@@ -53,52 +66,54 @@ class AudioService : Service() {
         sendBroadcast(intent)
     }
 
-
     private fun showNotification() {
-        val notificationIntent = Intent(this, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            notificationIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        CoroutineScope(Dispatchers.IO).launch {
+            val notificationIntent = Intent(this@AudioService, MainActivity::class.java)
+            val pendingIntent = PendingIntent.getActivity(
+                this@AudioService,
+                0,
+                notificationIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
 
-        // Создание Intent для кнопки Play/Pause
-        val playPauseIntent = Intent(this, AudioService::class.java).apply {
-            action = if (isPlaying) "PAUSE" else "PLAY"
-            putExtra("STATION_NAME", currentStation) // Убедитесь, что передаете текущую станцию
-        }
-        val playPausePendingIntent =
-            PendingIntent.getService(
-                this,
+            // Создание Intent для кнопки Play/Pause
+            val playPauseIntent = Intent(this@AudioService, AudioService::class.java).apply {
+                action = if (isPlaying) "PAUSE" else "PLAY"
+                putExtra("STATION_NAME", currentStation)
+            }
+            val playPausePendingIntent = PendingIntent.getService(
+                this@AudioService,
                 0,
                 playPauseIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-        val notification = NotificationCompat.Builder(this, "AUDIO_CHANNEL")
-            .setContentTitle(currentStation)
-            .setContentText(if (isPlaying) "Playing" else "Paused")
-            .setSmallIcon(R.drawable.ic_music_note)
-            .setContentIntent(pendingIntent)
-            .addAction(
-                if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play,
-                if (isPlaying) "Pause" else "Play",
-                playPausePendingIntent
-            )
-            .setOngoing(true)
-            .build()
+            val notification = NotificationCompat.Builder(this@AudioService, "AUDIO_CHANNEL")
+                .setContentTitle(currentStation)
+                .setContentText(if (isPlaying) "Playing" else "Paused")
+                .setSmallIcon(R.drawable.ic_music_note)
+                .setContentIntent(pendingIntent)
+                .addAction(
+                    if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play,
+                    if (isPlaying) "Pause" else "Play",
+                    playPausePendingIntent
+                )
+                .setOngoing(true)
+                .build()
 
-        notificationManager.notify(1, notification)
+            notificationManager.notify(1, notification)
 
-        // Отправляем обновление состояния
-        // TODO
-        val intent = Intent("UPDATE_PLAYBACK_STATE").apply {
-            putExtra("isPlaying", isPlaying)
-            putExtra("currentStation", currentStation)
+            // Отправляем обновление состояния
+            withContext(Dispatchers.Main) { // Переключаемся на главный поток
+                val intent = Intent("UPDATE_PLAYBACK_STATE").apply {
+                    putExtra("isPlaying", isPlaying)
+                    putExtra("currentStation", currentStation)
+                }
+                sendBroadcast(intent)
+            }
         }
-        sendBroadcast(intent)
     }
+
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -161,11 +176,13 @@ class AudioService : Service() {
     }
 
     private fun savePlaybackState(isPlaying: Boolean) {
-        val sharedPreferences = getSharedPreferences("AudioPrefs", Context.MODE_PRIVATE)
-        with(sharedPreferences.edit()) {
-            putBoolean("isPlaying", isPlaying)
-            putString("currentStation", currentStation)
-            apply()
+        CoroutineScope(Dispatchers.IO).launch {
+            val sharedPreferences = getSharedPreferences("AudioPrefs", Context.MODE_PRIVATE)
+            with(sharedPreferences.edit()) {
+                putBoolean("isPlaying", isPlaying)
+                putString("currentStation", currentStation)
+                apply()
+            }
         }
     }
 
