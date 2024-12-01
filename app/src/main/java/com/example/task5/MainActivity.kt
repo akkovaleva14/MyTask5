@@ -67,10 +67,15 @@ class MainActivity : AppCompatActivity() {
             stationAdapter.resetAllStations()
         }
 
-        lastPlayedStation =
-            if (isPlaying) station else lastPlayedStation // Сохраняем последнюю игравшую радиостанцию
-        playPauseButtonMain.setImageResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_loading)
-        playPauseButtonMain.isEnabled = !(!isPlaying && station == null)
+        lastPlayedStation = if (isPlaying) station else lastPlayedStation
+        playPauseButtonMain.setImageResource(
+            when {
+                isLoading -> R.drawable.ic_loading
+                isPlaying -> R.drawable.ic_pause
+                else -> R.drawable.ic_play
+            }
+        )
+        playPauseButtonMain.isEnabled = !isLoading // Disable the button during loading
     }
 
     private fun pauseAllStations() {
@@ -85,7 +90,7 @@ class MainActivity : AppCompatActivity() {
         val intent = Intent(this, AudioService::class.java).apply {
             putExtra("STATION_NAME", station)
             action = "PLAY"
- //           action = "PREPARE_AND_PLAY"
+            //           action = "PREPARE_AND_PLAY"
         }
         startService(intent)
         updatePlaybackState(isPlaying = true, isLoading = false, station)

@@ -14,10 +14,6 @@ class StationAdapter(
     private val context: Context
 ) : ListAdapter<String, StationAdapter.StationViewHolder>(StationDiffCallback()) {
 
-//    private var isPlaying = mutableMapOf<String, Boolean>().apply {
-//        stations.forEach { this[it] = false }
-//    }
-
     private var stationStates = mutableMapOf<String, StationState>().apply {
         stations.forEach { this[it] = StationState() }
     }

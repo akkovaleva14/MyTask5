@@ -20,7 +20,9 @@ class AudioService : Service() {
     private lateinit var mediaPlayer: MediaPlayer
     private lateinit var notificationManager: NotificationManager
     private var isPlaying = false
+    private var isLoading = false
     private var currentStation: String? = null
+    private var defaultStation: String = "https://radio.plaza.one/mp3"
 
     override fun onCreate() {
         super.onCreate()
@@ -35,6 +37,7 @@ class AudioService : Service() {
                 setDataSource(station) // Укажите URL потока
                 setOnPreparedListener {
                     this@AudioService.isPlaying = true
+                    // isPlaying = true
                     currentStation = station
                     val endTime = System.currentTimeMillis()
                     Log.d("AudioService", "Preparation time: ${endTime - startTime} ms")
@@ -42,12 +45,16 @@ class AudioService : Service() {
                     savePlaybackState(true) // Сохраняем состояние
                     showNotification() // Обновляем уведомление
                 }
-                sendLoadingStateUpdate(station)
+                setOnBufferingUpdateListener { _, percent ->
+                    CoroutineScope(Dispatchers.Main).launch {
+                        isLoading = percent < 100
+                        showNotification() // Update notification on the main thread
+                    }
+                }
                 prepareAsync() // Подготовка к воспроизведению
             }
         }
     }
-
 
     private fun pauseStream() {
         if (::mediaPlayer.isInitialized && isPlaying) {
@@ -56,16 +63,8 @@ class AudioService : Service() {
             savePlaybackState(false)
             showNotification()
             sendPlaybackStateUpdate() // Передача состояния
+            stopSelf() // Stop the service when music is paused
         }
-    }
-
-    private fun sendLoadingStateUpdate(station: String) {
-        val intent = Intent("UPDATE_PLAYBACK_STATE").apply {
-            putExtra("isPlaying", false)
-            putExtra("isLoading", true)
-            putExtra("currentStation", station)
-        }
-        sendBroadcast(intent)
     }
 
     private fun sendPlaybackStateUpdate() {
@@ -101,12 +100,18 @@ class AudioService : Service() {
 
             val notification = NotificationCompat.Builder(this@AudioService, "AUDIO_CHANNEL")
                 .setContentTitle(currentStation)
-                .setContentText(if (isPlaying) "Playing" else "Paused")
+                .setContentText(
+                    when {
+                        isLoading -> "Loading..."
+                        isPlaying -> "Playing"
+                        else -> "Paused"
+                    }
+                )
                 .setSmallIcon(R.drawable.ic_music_note)
                 .setContentIntent(pendingIntent)
                 .addAction(
-                    if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play,
-                    if (isPlaying) "Pause" else "Play",
+                    if (isPlaying) R.drawable.ic_pause else if (isLoading) R.drawable.ic_loading else R.drawable.ic_play,
+                    if (isPlaying) "Pause" else if (isLoading) "Loading" else "Play",
                     playPausePendingIntent
                 )
                 .setOngoing(true)
@@ -118,6 +123,7 @@ class AudioService : Service() {
             withContext(Dispatchers.Main) { // Переключаемся на главный поток
                 val intent = Intent("UPDATE_PLAYBACK_STATE").apply {
                     putExtra("isPlaying", isPlaying)
+                    putExtra("isLoading", isLoading)
                     putExtra("currentStation", currentStation)
                 }
                 sendBroadcast(intent)
@@ -140,7 +146,7 @@ class AudioService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        currentStation = intent?.getStringExtra("STATION_NAME")
+        currentStation = intent?.getStringExtra("STATION_NAME") ?: defaultStation
 
         when (intent?.action) {
             "PLAY" -> {
@@ -187,7 +193,7 @@ class AudioService : Service() {
         }
 
         showNotification() // Обновляем уведомление
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     private fun savePlaybackState(isPlaying: Boolean) {
@@ -207,6 +213,8 @@ class AudioService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        mediaPlayer.release()
+        if (::mediaPlayer.isInitialized) {
+            mediaPlayer.release()
+        }
     }
 }
