@@ -14,8 +14,12 @@ class StationAdapter(
     private val context: Context
 ) : ListAdapter<String, StationAdapter.StationViewHolder>(StationDiffCallback()) {
 
-    private var isPlaying = mutableMapOf<String, Boolean>().apply {
-        stations.forEach { this[it] = false }
+//    private var isPlaying = mutableMapOf<String, Boolean>().apply {
+//        stations.forEach { this[it] = false }
+//    }
+
+    private var stationStates = mutableMapOf<String, StationState>().apply {
+        stations.forEach { this[it] = StationState() }
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): StationViewHolder {
@@ -28,57 +32,62 @@ class StationAdapter(
         )
     }
 
-    // Обновляем состояние воспроизведения для определенной радиостанции
-    fun updatePlaybackState(isPlaying: Boolean, station: String?) {
-        station?.let {
-            this.isPlaying[it] = isPlaying
-            if (stations.indexOf(it) != -1) {
-                notifyItemChanged(stations.indexOf(it)) // Обновляем только измененный элемент
-            }
+    override fun getItemCount(): Int = stations.size
+
+    fun isAnyStationPlaying(): Boolean {
+        return stationStates.values.any { it.isPlaying }
+    }
+
+    // Обновление состояния станции
+    fun updateStationState(station: String, isPlaying: Boolean, isLoading: Boolean) {
+        stationStates[station]?.apply {
+            this.isPlaying = isPlaying
+            this.isLoading = isLoading
         }
+        notifyItemChanged(stations.indexOf(station))
+    }
+
+    // Сброс всех станций
+    fun resetAllStations() {
+        stationStates.forEach { it.value.isPlaying = false; it.value.isLoading = false }
+        notifyDataSetChanged()
     }
 
     override fun onBindViewHolder(holder: StationViewHolder, position: Int) {
-        holder.bind(stations[position], isPlaying[stations[position]] == true)
-    }
-
-    override fun getItemCount(): Int = stations.size
-
-    private fun togglePlayback(station: String) {
-        context.startService(
-            Intent(context, AudioService::class.java).apply {
-                putExtra("STATION_NAME", station)
-                this.action = if (isPlaying[station] == true) "PAUSE" else "PLAY"
-            }
-        )
-        isPlaying[station] = !(isPlaying[station] ?: false)
-
-        // Обновляем состояние кнопки в MainActivity
-        (context as MainActivity).updatePlaybackState(
-            isPlaying.values.any { it },
-            if (isPlaying.values.any { it }) station else null
-        )
-    }
-
-    fun isAnyStationPlaying(): Boolean {
-        return isPlaying.values.any { it }
+        val station = stations[position]
+        val state = stationStates[station] ?: StationState()
+        holder.bind(station, state)
     }
 
     inner class StationViewHolder(private val binding: ItemStationBinding) :
         RecyclerView.ViewHolder(binding.root) {
 
-        fun bind(station: String, isPlaying: Boolean) {
+        fun bind(station: String, state: StationState) {
             binding.stationName.text = station
-            binding.playPauseButton.setImageResource(
-                if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+            binding.playPauseButtonItem.setImageResource(
+                when {
+                    state.isLoading -> R.drawable.ic_loading
+                    state.isPlaying -> R.drawable.ic_pause
+                    else -> R.drawable.ic_play
+                }
             )
-            binding.playPauseButton.setOnClickListener {
-                togglePlayback(station)  // Обрабатываем переключение воспроизведения
+            binding.playPauseButtonItem.isEnabled = !state.isLoading
+            binding.playPauseButtonItem.setOnClickListener {
+                if (!state.isLoading) {
+                    resetAllStations() // Сбрасываем другие станции
+                    stationStates[station]?.isLoading = true
+                    notifyItemChanged(adapterPosition)
+                    context.startService(
+                        Intent(context, AudioService::class.java).apply {
+                            putExtra("STATION_NAME", station)
+                            action = if (state.isPlaying) "PAUSE" else "PLAY"
+                        }
+                    )
+                }
             }
         }
     }
 
-    // DiffUtil для эффективного обновления элементов списка
     class StationDiffCallback : DiffUtil.ItemCallback<String>() {
         override fun areItemsTheSame(oldItem: String, newItem: String): Boolean {
             return oldItem === newItem

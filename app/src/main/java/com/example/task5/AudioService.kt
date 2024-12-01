@@ -42,6 +42,7 @@ class AudioService : Service() {
                     savePlaybackState(true) // Сохраняем состояние
                     showNotification() // Обновляем уведомление
                 }
+                sendLoadingStateUpdate(station)
                 prepareAsync() // Подготовка к воспроизведению
             }
         }
@@ -58,9 +59,19 @@ class AudioService : Service() {
         }
     }
 
+    private fun sendLoadingStateUpdate(station: String) {
+        val intent = Intent("UPDATE_PLAYBACK_STATE").apply {
+            putExtra("isPlaying", false)
+            putExtra("isLoading", true)
+            putExtra("currentStation", station)
+        }
+        sendBroadcast(intent)
+    }
+
     private fun sendPlaybackStateUpdate() {
         val intent = Intent("UPDATE_PLAYBACK_STATE").apply {
             putExtra("isPlaying", isPlaying)
+            putExtra("isLoading", false)
             putExtra("currentStation", currentStation)
         }
         sendBroadcast(intent)
@@ -136,7 +147,8 @@ class AudioService : Service() {
                 if (!isPlaying) {
                     playStream(currentStation!!)
                     (application as MyApplication).mainActivity?.updatePlaybackState(
-                        true,
+                        isPlaying = true,
+                        isLoading = false,
                         currentStation
                     ) // Обновляем состояние
                 }
@@ -146,7 +158,8 @@ class AudioService : Service() {
                 if (isPlaying) {
                     pauseStream()
                     (application as MyApplication).mainActivity?.updatePlaybackState(
-                        false,
+                        isPlaying = false,
+                        isLoading = false,
                         currentStation
                     ) // Обновляем состояние
                 }
@@ -155,7 +168,8 @@ class AudioService : Service() {
             "PAUSE_ALL" -> {
                 pauseStream()
                 (application as MyApplication).mainActivity?.updatePlaybackState(
-                    false,
+                    isPlaying = false,
+                    isLoading = false,
                     null
                 ) // Обновляем состояние
             }
@@ -164,7 +178,8 @@ class AudioService : Service() {
                 if (currentStation != null) {
                     playStream(currentStation!!)
                     (application as MyApplication).mainActivity?.updatePlaybackState(
-                        true,
+                        isPlaying = true,
+                        isLoading = false,
                         currentStation
                     ) // Обновляем состояние
                 }

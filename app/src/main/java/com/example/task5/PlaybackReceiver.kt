@@ -7,17 +7,11 @@ import android.content.Intent
 class PlaybackReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val isPlaying = intent.getBooleanExtra("isPlaying", false)
+        val isLoading = intent.getBooleanExtra("isLoading", false)
         val currentStation = intent.getStringExtra("currentStation")
 
         if (context is MainActivity) {
-            context.updatePlaybackState(isPlaying, currentStation)
+            context.updatePlaybackState(isPlaying, isLoading, currentStation)
         }
-
-        // Обновите состояние в MainActivity
-        // TODO
-//        val mainActivityIntent = Intent(context, MainActivity::class.java)
-//        mainActivityIntent.putExtra("isPlaying", isPlaying)
-//        mainActivityIntent.putExtra("currentStation", currentStation)
-//        context.startActivity(mainActivityIntent)
     }
 }

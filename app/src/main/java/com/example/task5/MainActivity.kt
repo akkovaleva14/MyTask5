@@ -21,7 +21,7 @@ class MainActivity : AppCompatActivity() {
         "https://radiorecord.hostingradio.ru/hypno96.aacp",
         "https://radiorecord.hostingradio.ru/198096.aacp"
     )
-    private lateinit var playPauseButton: ImageButton
+    private lateinit var playPauseButtonMain: ImageButton
     private var lastPlayedStation: String? = null
     private lateinit var playbackReceiver: PlaybackReceiver
 
@@ -34,8 +34,9 @@ class MainActivity : AppCompatActivity() {
         recyclerView.adapter = stationAdapter
         recyclerView.layoutManager = LinearLayoutManager(this)
 
-        playPauseButton = findViewById(R.id.playPauseButton)
-        playPauseButton.setOnClickListener {
+        playPauseButtonMain = findViewById(R.id.playPauseButtonMain)
+        playPauseButtonMain.setImageResource(R.drawable.ic_play)
+        playPauseButtonMain.setOnClickListener {
             handlePlayPauseButtonClick()
         }
         playbackReceiver = PlaybackReceiver()
@@ -59,11 +60,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    fun updatePlaybackState(isPlaying: Boolean, station: String?) {
-        playPauseButton.setImageResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
+    fun updatePlaybackState(isPlaying: Boolean, isLoading: Boolean, station: String?) {
+        if (station != null) {
+            stationAdapter.updateStationState(station, isPlaying, !isLoading)
+        } else {
+            stationAdapter.resetAllStations()
+        }
+
         lastPlayedStation =
             if (isPlaying) station else lastPlayedStation // Сохраняем последнюю игравшую радиостанцию
-        stationAdapter.updatePlaybackState(isPlaying, station) // Обновляем состояние в адаптере
+        playPauseButtonMain.setImageResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_loading)
+        playPauseButtonMain.isEnabled = !(!isPlaying && station == null)
     }
 
     private fun pauseAllStations() {
@@ -71,17 +78,17 @@ class MainActivity : AppCompatActivity() {
             action = "PAUSE_ALL"
         }
         startService(intent)
-        updatePlaybackState(false, null)
+        updatePlaybackState(isPlaying = false, isLoading = true, null)
     }
 
     private fun playStation(station: String) {
         val intent = Intent(this, AudioService::class.java).apply {
             putExtra("STATION_NAME", station)
-//            action = "PLAY"
-            action = "PREPARE_AND_PLAY"
+            action = "PLAY"
+ //           action = "PREPARE_AND_PLAY"
         }
         startService(intent)
-        updatePlaybackState(true, station)
+        updatePlaybackState(isPlaying = true, isLoading = false, station)
     }
 
     override fun onResume() {
@@ -95,7 +102,7 @@ class MainActivity : AppCompatActivity() {
         val currentStation = sharedPreferences.getString("currentStation", null)
 
         // Обновите состояние кнопки
-        playPauseButton.setImageResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
+        playPauseButtonMain.setImageResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
         lastPlayedStation = currentStation // Обновите последнюю станцию
     }
 
