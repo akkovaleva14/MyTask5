@@ -3,14 +3,14 @@ package com.example.task5
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import android.widget.ImageButton
+import com.example.task5.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
-    private lateinit var recyclerView: RecyclerView
+    private lateinit var binding: ActivityMainBinding
     private lateinit var stationAdapter: StationAdapter
     private val stations = listOf(
         "https://radio.plaza.one/mp3",
@@ -21,99 +21,92 @@ class MainActivity : AppCompatActivity() {
         "https://radiorecord.hostingradio.ru/hypno96.aacp",
         "https://radiorecord.hostingradio.ru/198096.aacp"
     )
-    private lateinit var playPauseButtonMain: ImageButton
     private var lastPlayedStation: String? = null
     private lateinit var playbackReceiver: PlaybackReceiver
+    private lateinit var sharedPreferences: SharedPreferences
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
 
-        recyclerView = findViewById(R.id.recyclerView)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        sharedPreferences = getSharedPreferences("AudioPrefs", Context.MODE_PRIVATE)
+
         stationAdapter = StationAdapter(stations, this)
-        recyclerView.adapter = stationAdapter
-        recyclerView.layoutManager = LinearLayoutManager(this)
-
-        playPauseButtonMain = findViewById(R.id.playPauseButtonMain)
-        playPauseButtonMain.setImageResource(R.drawable.ic_play)
-        playPauseButtonMain.setOnClickListener {
-            handlePlayPauseButtonClick()
+        binding.recyclerView.apply {
+            adapter = stationAdapter
+            layoutManager = LinearLayoutManager(this@MainActivity)
         }
+
+        binding.playPauseButtonMain.setOnClickListener { handlePlayPauseButtonClick() }
+
         playbackReceiver = PlaybackReceiver()
         val filter = IntentFilter("UPDATE_PLAYBACK_STATE")
         registerReceiver(playbackReceiver, filter)
+
+        updateUIFromPreferences() // Initialize UI state from preferences
     }
 
     private fun handlePlayPauseButtonClick() {
         if (stationAdapter.isAnyStationPlaying()) {
-            // Если какая-то радиостанция играет, то ставим на паузу
+            // If any station is playing, pause all stations
             pauseAllStations()
         } else {
-            // Если ничего не играет
-            if (lastPlayedStation != null) {
-                // Запускаем последнюю игравшую радиостанцию
-                playStation(lastPlayedStation!!)
-            } else {
-                // Запускаем первую радиостанцию из списка
-                playStation(stations.first())
-            }
+            playStation(lastPlayedStation ?: stations.first())
         }
     }
 
     fun updatePlaybackState(isPlaying: Boolean, isLoading: Boolean, station: String?) {
-        if (station != null) {
+        station?.let {
             stationAdapter.updateStationState(station, isPlaying, !isLoading)
-        } else {
-            stationAdapter.resetAllStations()
-        }
+        } ?: stationAdapter.resetAllStations()
 
         lastPlayedStation = if (isPlaying) station else lastPlayedStation
-        playPauseButtonMain.setImageResource(
+        updatePlayPauseButton(isPlaying, isLoading)
+    }
+
+    private fun updatePlayPauseButton(isPlaying: Boolean, isLoading: Boolean) {
+        binding.playPauseButtonMain.setImageResource(
             when {
                 isLoading -> R.drawable.ic_loading
                 isPlaying -> R.drawable.ic_pause
                 else -> R.drawable.ic_play
             }
         )
-        playPauseButtonMain.isEnabled = !isLoading // Disable the button during loading
+        binding.playPauseButtonMain.isEnabled = !isLoading // Disable button during loading
     }
 
     private fun pauseAllStations() {
-        val intent = Intent(this, AudioService::class.java).apply {
+        startService(Intent(this, AudioService::class.java).apply {
             action = "PAUSE_ALL"
-        }
-        startService(intent)
-        updatePlaybackState(isPlaying = false, isLoading = true, null)
+        })
+        updatePlaybackState(isPlaying = false, isLoading = false, station = null)
     }
 
     private fun playStation(station: String) {
-        val intent = Intent(this, AudioService::class.java).apply {
+        startService(Intent(this, AudioService::class.java).apply {
             putExtra("STATION_NAME", station)
             action = "PLAY"
-            //           action = "PREPARE_AND_PLAY"
-        }
-        startService(intent)
-        updatePlaybackState(isPlaying = true, isLoading = false, station)
+        })
+        updatePlaybackState(isPlaying = true, isLoading = false, station = station)
     }
 
     override fun onResume() {
         super.onResume()
-        updateUIFromPreferences() // Обновляем UI из SharedPreferences
+        updateUIFromPreferences() // Update UI from SharedPreferences
     }
 
     private fun updateUIFromPreferences() {
-        val sharedPreferences = getSharedPreferences("AudioPrefs", Context.MODE_PRIVATE)
         val isPlaying = sharedPreferences.getBoolean("isPlaying", false)
-        val currentStation = sharedPreferences.getString("currentStation", null)
+        val station = sharedPreferences.getString("currentStation", null)
 
-        // Обновите состояние кнопки
-        playPauseButtonMain.setImageResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
-        lastPlayedStation = currentStation // Обновите последнюю станцию
+        updatePlayPauseButton(isPlaying, isLoading = false) // Always false for the initial state
+        lastPlayedStation = station
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        unregisterReceiver(playbackReceiver) // Отменяем регистрацию при уничтожении
+        unregisterReceiver(playbackReceiver) // Unregister the receiver when the activity is destroyed
     }
-
 }

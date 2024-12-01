@@ -9,10 +9,10 @@ import android.content.Intent
 import android.media.MediaPlayer
 import android.os.Build
 import android.os.IBinder
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -23,6 +23,7 @@ class AudioService : Service() {
     private var isLoading = false
     private var currentStation: String? = null
     private var defaultStation: String = "https://radio.plaza.one/mp3"
+    private val serviceScope = CoroutineScope(Dispatchers.IO) // Используем общий scope для всех корутин
 
     override fun onCreate() {
         super.onCreate()
@@ -31,28 +32,21 @@ class AudioService : Service() {
     }
 
     private fun playStream(station: String) {
-        CoroutineScope(Dispatchers.IO).launch {
-            val startTime = System.currentTimeMillis()
-            mediaPlayer = MediaPlayer().apply {
-                setDataSource(station) // Укажите URL потока
-                setOnPreparedListener {
-                    this@AudioService.isPlaying = true
-                    // isPlaying = true
-                    currentStation = station
-                    val endTime = System.currentTimeMillis()
-                    Log.d("AudioService", "Preparation time: ${endTime - startTime} ms")
-                    start()
-                    savePlaybackState(true) // Сохраняем состояние
-                    showNotification() // Обновляем уведомление
-                }
-                setOnBufferingUpdateListener { _, percent ->
-                    CoroutineScope(Dispatchers.Main).launch {
-                        isLoading = percent < 100
-                        showNotification() // Update notification on the main thread
-                    }
-                }
-                prepareAsync() // Подготовка к воспроизведению
+        if (!::mediaPlayer.isInitialized) {
+            mediaPlayer = MediaPlayer() // Инициализация MediaPlayer, если его еще нет
+        }
+
+        mediaPlayer.apply {
+            reset() // Сбрасываем плеер перед новой загрузкой потока
+            setDataSource(station) // Указываем URL потока
+            setOnPreparedListener {
+                this@AudioService.isPlaying = true
+                currentStation = station
+                start()
+                savePlaybackState(true) // Сохраняем состояние
+                showNotification() // Обновляем уведомление
             }
+            prepareAsync() // Подготовка к воспроизведению
         }
     }
 
@@ -63,21 +57,20 @@ class AudioService : Service() {
             savePlaybackState(false)
             showNotification()
             sendPlaybackStateUpdate() // Передача состояния
-            stopSelf() // Stop the service when music is paused
+            stopSelf() // Останавливаем сервис, когда музыка приостановлена
         }
     }
 
     private fun sendPlaybackStateUpdate() {
-        val intent = Intent("UPDATE_PLAYBACK_STATE").apply {
+        sendBroadcast(Intent("UPDATE_PLAYBACK_STATE").apply {
             putExtra("isPlaying", isPlaying)
-            putExtra("isLoading", false)
+            putExtra("isLoading", isLoading)
             putExtra("currentStation", currentStation)
-        }
-        sendBroadcast(intent)
+        })
     }
 
     private fun showNotification() {
-        CoroutineScope(Dispatchers.IO).launch {
+        serviceScope.launch {
             val notificationIntent = Intent(this@AudioService, MainActivity::class.java)
             val pendingIntent = PendingIntent.getActivity(
                 this@AudioService,
@@ -86,15 +79,13 @@ class AudioService : Service() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            // Создание Intent для кнопки Play/Pause
-            val playPauseIntent = Intent(this@AudioService, AudioService::class.java).apply {
-                action = if (isPlaying) "PAUSE" else "PLAY"
-                putExtra("STATION_NAME", currentStation)
-            }
             val playPausePendingIntent = PendingIntent.getService(
                 this@AudioService,
                 0,
-                playPauseIntent,
+                Intent(this@AudioService, AudioService::class.java).apply {
+                    action = if (isPlaying) "PAUSE" else "PLAY"
+                    putExtra("STATION_NAME", currentStation)
+                },
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
@@ -131,17 +122,15 @@ class AudioService : Service() {
         }
     }
 
-
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
+            notificationManager.createNotificationChannel(NotificationChannel(
                 "AUDIO_CHANNEL",
                 "Audio Playback",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "Channel for audio playback notifications"
-            }
-            notificationManager.createNotificationChannel(channel)
+            })
         }
     }
 
@@ -197,7 +186,7 @@ class AudioService : Service() {
     }
 
     private fun savePlaybackState(isPlaying: Boolean) {
-        CoroutineScope(Dispatchers.IO).launch {
+        serviceScope.launch {
             val sharedPreferences = getSharedPreferences("AudioPrefs", Context.MODE_PRIVATE)
             with(sharedPreferences.edit()) {
                 putBoolean("isPlaying", isPlaying)
@@ -216,5 +205,6 @@ class AudioService : Service() {
         if (::mediaPlayer.isInitialized) {
             mediaPlayer.release()
         }
+        serviceScope.cancel() // Отменяем все корутины при уничтожении сервиса
     }
 }
