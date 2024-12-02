@@ -4,7 +4,6 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.content.Context
 import android.content.Intent
 import android.media.MediaPlayer
 import android.os.Build
@@ -26,7 +25,7 @@ class AudioService : Service() {
         super.onCreate()
         notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannel()
-        stationStates[defaultStation] = StationState() // Инициализируем состояние для станции по умолчанию
+        stationStates[defaultStation] = StationState()
     }
 
     private fun playStream(station: String) {
@@ -65,6 +64,7 @@ class AudioService : Service() {
             updateNotification(station)
             sendPlaybackStateUpdate()
         }
+        stopSelf()
     }
 
     private fun sendPlaybackStateUpdate() {
@@ -78,54 +78,55 @@ class AudioService : Service() {
 
     private fun updateNotification(station: String) {
         val stationState = stationStates[station] ?: StationState()
-        val notificationIntent = Intent(this, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
-            this, 0, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+
+        notificationManager.notify(
+            1,
+            NotificationCompat.Builder(this, "AUDIO_CHANNEL")
+                .setContentTitle(station)
+                .setContentText(
+                    when {
+                        stationState.isLoading -> "Loading..."
+                        stationState.isPlaying -> "Playing"
+                        else -> "Paused"
+                    }
+                )
+                .setSmallIcon(R.drawable.ic_music_note)
+                .setContentIntent(
+                    PendingIntent.getActivity(
+                        this,
+                        0,
+                        Intent(this, MainActivity::class.java),
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                )
+                .addAction(
+                    if (stationState.isPlaying) R.drawable.ic_pause else R.drawable.ic_play, // TODO
+                    if (stationState.isPlaying) "Pause" else "Play",
+                    PendingIntent.getService(
+                        this, 0, Intent(this, AudioService::class.java).apply {
+                            action = if (stationState.isPlaying) "PAUSE" else "PLAY"
+                            putExtra("STATION_NAME", station)
+                        }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                )
+                .setDeleteIntent(
+                    PendingIntent.getService(
+                        this, 0, Intent(this, AudioService::class.java).apply {
+                            action = "STOP"
+                            putExtra("STATION_NAME", station)
+                        }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                )
+                .setAutoCancel(true)
+                .build()
         )
-
-        val playPauseIntent = PendingIntent.getService(
-            this, 0, Intent(this, AudioService::class.java).apply {
-                action = if (stationState.isPlaying) "PAUSE" else "PLAY"
-                putExtra("STATION_NAME", station)
-            }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val stopIntent = PendingIntent.getService(
-            this, 0, Intent(this, AudioService::class.java).apply {
-                action = "STOP"
-                putExtra("STATION_NAME", station)
-            }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val notification = NotificationCompat.Builder(this, "AUDIO_CHANNEL")
-            .setContentTitle(station)
-            .setContentText(
-                when {
-                    stationState.isLoading -> "Loading..."
-                    stationState.isPlaying -> "Playing"
-                    else -> "Paused"
-                }
-            )
-            .setSmallIcon(R.drawable.ic_music_note)
-            .setContentIntent(pendingIntent)
-            .addAction(
-                if (stationState.isPlaying) R.drawable.ic_pause else R.drawable.ic_play,
-                if (stationState.isPlaying) "Pause" else "Play",
-                playPauseIntent
-            )
-            .setDeleteIntent(stopIntent)
-            .setAutoCancel(true)
-            .build()
-
-        notificationManager.notify(1, notification)
     }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
+            notificationManager.createNotificationChannel(NotificationChannel(
                 "AUDIO_CHANNEL", "Audio Playback", NotificationManager.IMPORTANCE_LOW
-            ).apply { description = "Channel for audio playback notifications" }
-            notificationManager.createNotificationChannel(channel)
+            ).apply { description = "Channel for audio playback notifications" })
         }
     }
 
