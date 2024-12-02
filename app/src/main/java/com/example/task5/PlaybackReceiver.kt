@@ -5,13 +5,11 @@ import android.content.Context
 import android.content.Intent
 
 class PlaybackReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        if (context is MainActivity) {
-            context.updatePlaybackState(
-                intent.getBooleanExtra("isPlaying", false),
-                intent.getBooleanExtra("isLoading", false),
-                intent.getStringExtra("currentStation")
-            )
-        }
+    override fun onReceive(context: Context?, intent: Intent?) {
+        (context as MainActivity).updatePlaybackState(
+            intent?.getBooleanExtra("isPlaying", false) ?: false,
+            intent?.getBooleanExtra("isLoading", false) ?: false,
+            intent?.getStringExtra("currentStation")
+        )
     }
 }

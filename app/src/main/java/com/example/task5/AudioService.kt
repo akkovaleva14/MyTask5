@@ -67,6 +67,17 @@ class AudioService : Service() {
         stopSelf()
     }
 
+    private fun stopStream(station: String) {
+        val stationState = stationStates[station] ?: return
+        if (::mediaPlayer.isInitialized) {
+            mediaPlayer.stop()
+        }
+        stationState.isPlaying = false
+        updateNotification(station)
+        sendPlaybackStateUpdate()  // Notify MainActivity about the stop
+        stopSelf()
+    }
+
     private fun sendPlaybackStateUpdate() {
         val currentStationState = stationStates[currentStation] ?: return
         sendBroadcast(Intent("UPDATE_PLAYBACK_STATE").apply {
@@ -137,7 +148,7 @@ class AudioService : Service() {
         when (intent?.action) {
             "PLAY" -> playStream(station)
             "PAUSE" -> pauseStream(station)
-            "STOP" -> stopSelf()
+            "STOP" -> stopStream(station)
         }
 
         return START_NOT_STICKY
