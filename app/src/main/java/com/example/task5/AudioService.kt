@@ -168,14 +168,6 @@ class AudioService : Service() {
                     ) // Обновляем состояние
                 }
             }
-            "PAUSE_ALL" -> {
-                pauseStream()
-                (application as MyApplication).mainActivity?.updatePlaybackState(
-                    isPlaying = false,
-                    isLoading = false,
-                    null
-                ) // Обновляем состояние
-            }
 
             "STOP" -> {
                 if (isPlaying) {

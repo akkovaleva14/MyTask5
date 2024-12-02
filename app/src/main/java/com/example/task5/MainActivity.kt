@@ -42,16 +42,14 @@ class MainActivity : AppCompatActivity() {
         binding.playPauseButtonMain.setOnClickListener { handlePlayPauseButtonClick() }
 
         playbackReceiver = PlaybackReceiver()
-        val filter = IntentFilter("UPDATE_PLAYBACK_STATE")
-        registerReceiver(playbackReceiver, filter)
+        registerReceiver(playbackReceiver, IntentFilter("UPDATE_PLAYBACK_STATE"))
 
         updateUIFromPreferences() // Initialize UI state from preferences
     }
 
     private fun handlePlayPauseButtonClick() {
         if (stationAdapter.isAnyStationPlaying()) {
-            // If any station is playing, pause all stations
-            pauseAllStations()
+            pauseAnyStation()
         } else {
             playStation(lastPlayedStation ?: stations.first())
         }
@@ -60,7 +58,7 @@ class MainActivity : AppCompatActivity() {
     fun updatePlaybackState(isPlaying: Boolean, isLoading: Boolean, station: String?) {
         station?.let {
             stationAdapter.updateStationState(station, isPlaying, !isLoading)
-        } ?: stationAdapter.resetAllStations()
+        } ?: stationAdapter.resetCurrentPlayingStation()
 
         lastPlayedStation = if (isPlaying) station else lastPlayedStation
         updatePlayPauseButton(isPlaying, isLoading)
@@ -77,9 +75,9 @@ class MainActivity : AppCompatActivity() {
         binding.playPauseButtonMain.isEnabled = !isLoading // Disable button during loading
     }
 
-    private fun pauseAllStations() {
+    private fun pauseAnyStation() {
         startService(Intent(this, AudioService::class.java).apply {
-            action = "PAUSE_ALL"
+            action = "PAUSE"
         })
         updatePlaybackState(isPlaying = false, isLoading = false, station = null)
     }
@@ -94,19 +92,19 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        updateUIFromPreferences() // Update UI from SharedPreferences
+        updateUIFromPreferences()
     }
 
     private fun updateUIFromPreferences() {
-        val isPlaying = sharedPreferences.getBoolean("isPlaying", false)
-        val station = sharedPreferences.getString("currentStation", null)
-
-        updatePlayPauseButton(isPlaying, isLoading = false) // Always false for the initial state
-        lastPlayedStation = station
+        updatePlayPauseButton(
+            sharedPreferences.getBoolean("isPlaying", false),
+            isLoading = false
+        ) // isLoading is always false for the initial state
+        lastPlayedStation = sharedPreferences.getString("currentStation", null)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        unregisterReceiver(playbackReceiver) // Unregister the receiver when the activity is destroyed
+        unregisterReceiver(playbackReceiver)
     }
 }

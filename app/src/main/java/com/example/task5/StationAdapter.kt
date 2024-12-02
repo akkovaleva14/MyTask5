@@ -34,7 +34,6 @@ class StationAdapter(
         return stationStates.values.any { it.isPlaying }
     }
 
-    // Обновление состояния станции
     fun updateStationState(station: String, isPlaying: Boolean, isLoading: Boolean) {
         stationStates[station]?.apply {
             this.isPlaying = isPlaying
@@ -43,16 +42,17 @@ class StationAdapter(
         notifyItemChanged(stations.indexOf(station))
     }
 
-    // Сброс всех станций
-    fun resetAllStations() {
-        stationStates.forEach { it.value.isPlaying = false; it.value.isLoading = false }
-        notifyDataSetChanged()
+    fun resetCurrentPlayingStation() {
+        val currentStation = stationStates.entries.find { it.value.isPlaying || it.value.isLoading }
+        currentStation?.let {
+            it.value.isPlaying = false
+            it.value.isLoading = false
+            notifyItemChanged(stations.indexOf(it.key))
+        }
     }
 
     override fun onBindViewHolder(holder: StationViewHolder, position: Int) {
-        val station = stations[position]
-        val state = stationStates[station] ?: StationState()
-        holder.bind(station, state)
+        holder.bind(stations[position], stationStates[stations[position]] ?: StationState())
     }
 
     inner class StationViewHolder(private val binding: ItemStationBinding) :
@@ -68,11 +68,13 @@ class StationAdapter(
                 }
             )
             binding.playPauseButtonItem.isEnabled = !state.isLoading
+
             binding.playPauseButtonItem.setOnClickListener {
                 if (!state.isLoading) {
-                    resetAllStations() // Сбрасываем другие станции
+                    resetCurrentPlayingStation()
                     stationStates[station]?.isLoading = true
                     notifyItemChanged(adapterPosition)
+
                     context.startService(
                         Intent(context, AudioService::class.java).apply {
                             putExtra("STATION_NAME", station)
