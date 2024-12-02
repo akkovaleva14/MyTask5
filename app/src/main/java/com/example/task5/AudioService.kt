@@ -13,210 +13,143 @@ import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class AudioService : Service() {
     private lateinit var mediaPlayer: MediaPlayer
     private lateinit var notificationManager: NotificationManager
-    private var isPlaying = false
-    private var isLoading = false
+    private val stationStates = mutableMapOf<String, StationState>()
     private var currentStation: String? = null
-    private var defaultStation: String = "https://radio.plaza.one/mp3"
-    private val serviceScope = CoroutineScope(Dispatchers.IO) // Используем общий scope для всех корутин
+    private val defaultStation = "https://radio.plaza.one/mp3"
+    private val serviceScope = CoroutineScope(Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
         notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannel()
+        stationStates[defaultStation] = StationState() // Инициализируем состояние для станции по умолчанию
     }
 
     private fun playStream(station: String) {
+        val stationState = stationStates.getOrPut(station) { StationState() }
+        stationState.isLoading = true
+        updateNotification(station)
+
         if (!::mediaPlayer.isInitialized) {
-            mediaPlayer = MediaPlayer() // Инициализация MediaPlayer, если его еще нет
+            mediaPlayer = MediaPlayer()
         }
 
         mediaPlayer.apply {
-            reset() // Сбрасываем плеер перед новой загрузкой потока
-            setDataSource(station) // Указываем URL потока
+            reset()
+            setDataSource(station)
             setOnPreparedListener {
-                this@AudioService.isPlaying = true
+                stationState.isPlaying = true
+                stationState.isLoading = false
                 currentStation = station
                 start()
-                savePlaybackState(true) // Сохраняем состояние
-                showNotification() // Обновляем уведомление
+                updateNotification(station)
+                sendPlaybackStateUpdate()
             }
-            prepareAsync() // Подготовка к воспроизведению
+            setOnCompletionListener {
+                stationState.isPlaying = false
+                updateNotification(station)
+            }
+            prepareAsync()
         }
     }
 
-    private fun pauseStream() {
-        if (::mediaPlayer.isInitialized && isPlaying) {
+    private fun pauseStream(station: String) {
+        val stationState = stationStates[station] ?: return
+        if (::mediaPlayer.isInitialized && stationState.isPlaying) {
             mediaPlayer.pause()
-            isPlaying = false
-            savePlaybackState(false)
-            showNotification()
-            sendPlaybackStateUpdate() // Передача состояния
-            stopSelf() // Останавливаем сервис, когда музыка приостановлена
+            stationState.isPlaying = false
+            updateNotification(station)
+            sendPlaybackStateUpdate()
         }
     }
 
     private fun sendPlaybackStateUpdate() {
+        val currentStationState = stationStates[currentStation] ?: return
         sendBroadcast(Intent("UPDATE_PLAYBACK_STATE").apply {
-            putExtra("isPlaying", isPlaying)
-            putExtra("isLoading", isLoading)
+            putExtra("isPlaying", currentStationState.isPlaying)
+            putExtra("isLoading", currentStationState.isLoading)
             putExtra("currentStation", currentStation)
         })
     }
 
-    private fun showNotification() {
-        serviceScope.launch {
-            val notificationIntent = Intent(this@AudioService, MainActivity::class.java)
-            val pendingIntent = PendingIntent.getActivity(
-                this@AudioService,
-                0,
-                notificationIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    private fun updateNotification(station: String) {
+        val stationState = stationStates[station] ?: StationState()
+        val notificationIntent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val playPauseIntent = PendingIntent.getService(
+            this, 0, Intent(this, AudioService::class.java).apply {
+                action = if (stationState.isPlaying) "PAUSE" else "PLAY"
+                putExtra("STATION_NAME", station)
+            }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val stopIntent = PendingIntent.getService(
+            this, 0, Intent(this, AudioService::class.java).apply {
+                action = "STOP"
+                putExtra("STATION_NAME", station)
+            }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, "AUDIO_CHANNEL")
+            .setContentTitle(station)
+            .setContentText(
+                when {
+                    stationState.isLoading -> "Loading..."
+                    stationState.isPlaying -> "Playing"
+                    else -> "Paused"
+                }
             )
-
-            val playPausePendingIntent = PendingIntent.getService(
-                this@AudioService,
-                0,
-                Intent(this@AudioService, AudioService::class.java).apply {
-                    action = if (isPlaying) "PAUSE" else "PLAY"
-                    putExtra("STATION_NAME", currentStation)
-                },
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            .setSmallIcon(R.drawable.ic_music_note)
+            .setContentIntent(pendingIntent)
+            .addAction(
+                if (stationState.isPlaying) R.drawable.ic_pause else R.drawable.ic_play,
+                if (stationState.isPlaying) "Pause" else "Play",
+                playPauseIntent
             )
+            .setDeleteIntent(stopIntent)
+            .setAutoCancel(true)
+            .build()
 
-            val stopIntent = PendingIntent.getService(
-                this@AudioService,
-                0,
-                Intent(this@AudioService, AudioService::class.java).apply {
-                    action = "STOP"
-                },
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-
-            val notification = NotificationCompat.Builder(this@AudioService, "AUDIO_CHANNEL")
-                .setContentTitle(currentStation)
-                .setContentText(
-                    when {
-                        isLoading -> "Loading..."
-                        isPlaying -> "Playing"
-                        else -> "Paused"
-                    }
-                )
-                .setSmallIcon(R.drawable.ic_music_note)
-                .setContentIntent(pendingIntent)
-                .addAction(
-                    if (isPlaying) R.drawable.ic_pause else if (isLoading) R.drawable.ic_loading else R.drawable.ic_play,
-                    if (isPlaying) "Pause" else if (isLoading) "Loading" else "Play",
-                    playPausePendingIntent
-                )
-                .setDeleteIntent(stopIntent) // Устанавливаем Intent для остановки при свайпе
-                .setAutoCancel(true) // Разрешаем свайп для закрытия
-                .build()
-
-            notificationManager.notify(1, notification)
-
-            // Отправляем обновление состояния
-            withContext(Dispatchers.Main) { // Переключаемся на главный поток
-                sendBroadcast(Intent("UPDATE_PLAYBACK_STATE").apply {
-                    putExtra("isPlaying", isPlaying)
-                    putExtra("isLoading", isLoading)
-                    putExtra("currentStation", currentStation)
-                })
-            }
-        }
+        notificationManager.notify(1, notification)
     }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            notificationManager.createNotificationChannel(NotificationChannel(
-                "AUDIO_CHANNEL",
-                "Audio Playback",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Channel for audio playback notifications"
-            })
+            val channel = NotificationChannel(
+                "AUDIO_CHANNEL", "Audio Playback", NotificationManager.IMPORTANCE_LOW
+            ).apply { description = "Channel for audio playback notifications" }
+            notificationManager.createNotificationChannel(channel)
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        currentStation = intent?.getStringExtra("STATION_NAME") ?: defaultStation
+        val station = intent?.getStringExtra("STATION_NAME") ?: defaultStation
+        currentStation = station
 
         when (intent?.action) {
-            "PLAY" -> {
-                if (!isPlaying) {
-                    playStream(currentStation!!)
-                    (application as MyApplication).mainActivity?.updatePlaybackState(
-                        isPlaying = true,
-                        isLoading = false,
-                        currentStation
-                    ) // Обновляем состояние
-                }
-            }
-
-            "PAUSE" -> {
-                if (isPlaying) {
-                    pauseStream()
-                    (application as MyApplication).mainActivity?.updatePlaybackState(
-                        isPlaying = false,
-                        isLoading = false,
-                        currentStation
-                    ) // Обновляем состояние
-                }
-            }
-
-            "STOP" -> {
-                if (isPlaying) {
-                    pauseStream() // Останавливаем воспроизведение
-                    (application as MyApplication).mainActivity?.updatePlaybackState(
-                        isPlaying = false,
-                        isLoading = false,
-                        currentStation
-                    )
-                }
-                stopSelf() // Полностью останавливаем сервис
-            }
-
-            else -> {
-                if (currentStation != null) {
-                    playStream(currentStation!!)
-                    (application as MyApplication).mainActivity?.updatePlaybackState(
-                        isPlaying = true,
-                        isLoading = false,
-                        currentStation
-                    ) // Обновляем состояние
-                }
-            }
+            "PLAY" -> playStream(station)
+            "PAUSE" -> pauseStream(station)
+            "STOP" -> stopSelf()
         }
 
-        showNotification() // Обновляем уведомление
-        return START_NOT_STICKY // Гарантируем, что сервис не перезапустится
+        return START_NOT_STICKY
     }
 
-    private fun savePlaybackState(isPlaying: Boolean) {
-        serviceScope.launch {
-            with(getSharedPreferences("AudioPrefs", Context.MODE_PRIVATE).edit()) {
-                putBoolean("isPlaying", isPlaying)
-                putString("currentStation", currentStation)
-                apply()
-            }
-        }
-    }
-
-    override fun onBind(intent: Intent?): IBinder? {
-        return null
-    }
+    override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
         super.onDestroy()
         if (::mediaPlayer.isInitialized) {
-            mediaPlayer.stop() // Останавливаем воспроизведение
-            mediaPlayer.release() // Освобождаем ресурсы
+            mediaPlayer.stop()
+            mediaPlayer.release()
         }
-        serviceScope.cancel() // Отменяем все корутины при уничтожении сервиса
+        serviceScope.cancel()
     }
 }
