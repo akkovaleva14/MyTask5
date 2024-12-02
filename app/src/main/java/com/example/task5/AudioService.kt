@@ -89,6 +89,15 @@ class AudioService : Service() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
+            val stopIntent = PendingIntent.getService(
+                this@AudioService,
+                0,
+                Intent(this@AudioService, AudioService::class.java).apply {
+                    action = "STOP"
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
             val notification = NotificationCompat.Builder(this@AudioService, "AUDIO_CHANNEL")
                 .setContentTitle(currentStation)
                 .setContentText(
@@ -105,19 +114,19 @@ class AudioService : Service() {
                     if (isPlaying) "Pause" else if (isLoading) "Loading" else "Play",
                     playPausePendingIntent
                 )
-                .setOngoing(true)
+                .setDeleteIntent(stopIntent) // Устанавливаем Intent для остановки при свайпе
+                .setAutoCancel(true) // Разрешаем свайп для закрытия
                 .build()
 
             notificationManager.notify(1, notification)
 
             // Отправляем обновление состояния
             withContext(Dispatchers.Main) { // Переключаемся на главный поток
-                val intent = Intent("UPDATE_PLAYBACK_STATE").apply {
+                sendBroadcast(Intent("UPDATE_PLAYBACK_STATE").apply {
                     putExtra("isPlaying", isPlaying)
                     putExtra("isLoading", isLoading)
                     putExtra("currentStation", currentStation)
-                }
-                sendBroadcast(intent)
+                })
             }
         }
     }
@@ -159,7 +168,6 @@ class AudioService : Service() {
                     ) // Обновляем состояние
                 }
             }
-
             "PAUSE_ALL" -> {
                 pauseStream()
                 (application as MyApplication).mainActivity?.updatePlaybackState(
@@ -167,6 +175,18 @@ class AudioService : Service() {
                     isLoading = false,
                     null
                 ) // Обновляем состояние
+            }
+
+            "STOP" -> {
+                if (isPlaying) {
+                    pauseStream() // Останавливаем воспроизведение
+                    (application as MyApplication).mainActivity?.updatePlaybackState(
+                        isPlaying = false,
+                        isLoading = false,
+                        currentStation
+                    )
+                }
+                stopSelf() // Полностью останавливаем сервис
             }
 
             else -> {
@@ -182,13 +202,12 @@ class AudioService : Service() {
         }
 
         showNotification() // Обновляем уведомление
-        return START_NOT_STICKY
+        return START_NOT_STICKY // Гарантируем, что сервис не перезапустится
     }
 
     private fun savePlaybackState(isPlaying: Boolean) {
         serviceScope.launch {
-            val sharedPreferences = getSharedPreferences("AudioPrefs", Context.MODE_PRIVATE)
-            with(sharedPreferences.edit()) {
+            with(getSharedPreferences("AudioPrefs", Context.MODE_PRIVATE).edit()) {
                 putBoolean("isPlaying", isPlaying)
                 putString("currentStation", currentStation)
                 apply()
@@ -203,7 +222,8 @@ class AudioService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         if (::mediaPlayer.isInitialized) {
-            mediaPlayer.release()
+            mediaPlayer.stop() // Останавливаем воспроизведение
+            mediaPlayer.release() // Освобождаем ресурсы
         }
         serviceScope.cancel() // Отменяем все корутины при уничтожении сервиса
     }
