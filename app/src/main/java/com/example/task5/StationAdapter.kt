@@ -62,8 +62,7 @@ class StationAdapter(
             binding.stationName.text = station
             binding.playPauseButtonItem.setImageResource(
                 when {
-                    state.isLoading -> R.drawable.ic_loading
-                    state.isPlaying -> R.drawable.ic_pause
+                    state.isLoading -> R.drawable.ic_music_note
                     else -> R.drawable.ic_play
                 }
             )

@@ -67,7 +67,6 @@ class MainActivity : AppCompatActivity() {
     private fun updatePlayPauseButton(isPlaying: Boolean, isLoading: Boolean) {
         binding.playPauseButtonMain.setImageResource(
             when {
-                isLoading -> R.drawable.ic_loading
                 isPlaying -> R.drawable.ic_pause
                 else -> R.drawable.ic_play
             }
