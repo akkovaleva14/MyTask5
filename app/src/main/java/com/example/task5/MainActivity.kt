@@ -1,5 +1,6 @@
 package com.example.task5
 
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -7,6 +8,7 @@ import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.example.task5.AudioService.Companion.NOTIFICATION_ID
 import com.example.task5.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
@@ -27,13 +29,17 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         sharedPreferences = getSharedPreferences("AudioPrefs", Context.MODE_PRIVATE)
-        stationAdapter = StationAdapter(stations, this)
+        sharedPreferences.edit().apply {
+            putBoolean("isPlaying", false)
+            putBoolean("isLoading", false)
+            apply()
+        }
 
+        stationAdapter = StationAdapter(stations, this)
         binding.recyclerView.apply {
             adapter = stationAdapter
             layoutManager = LinearLayoutManager(this@MainActivity)
@@ -44,15 +50,17 @@ class MainActivity : AppCompatActivity() {
         playbackReceiver = PlaybackReceiver()
         registerReceiver(playbackReceiver, IntentFilter("UPDATE_PLAYBACK_STATE"))
 
-        updateUIFromPreferences() // Initialize UI state from preferences
+        updateUIFromPreferences()
     }
 
     private fun handlePlayPauseButtonClick() {
-        val isLoading = sharedPreferences.getBoolean("isLoading", false)
-        if (isLoading) return // Блокируем нажатие, если идет загрузка
-
+        if (sharedPreferences.getBoolean(
+                "isLoading",
+                false
+            )
+        ) return // Блокируем нажатие, если идет загрузка
         if (stationAdapter.isAnyStationPlaying()) {
-            pauseAnyStation()
+            pauseAnyStation(lastPlayedStation)
         } else {
             playStation(lastPlayedStation ?: stations.first())
         }
@@ -91,12 +99,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun pauseAnyStation() {
+    private fun pauseAnyStation(station: String?) {
         startService(Intent(this, AudioService::class.java).apply {
             action = "PAUSE"
         })
-        updatePlaybackState(isPlaying = false, isLoading = false, station = null)
-        savePlaybackState(isPlaying = false, isLoading = false, station = null)
+        updatePlaybackState(isPlaying = false, isLoading = false, station)
+        savePlaybackState(isPlaying = false, isLoading = false, station)
     }
 
     private fun playStation(station: String) {
@@ -127,20 +135,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateNotificationFromActivity(station: String) {
-        val intent = Intent(this, AudioService::class.java).apply {
+        startService(Intent(this, AudioService::class.java).apply {
             action = "UPDATE_NOTIFICATION"
             putExtra("STATION_NAME", station)
-        }
-        startService(intent)
+        })
     }
-
 
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(playbackReceiver)
-    }
-}
+        startService(Intent(this, AudioService::class.java).apply {
+            action = "STOP"
+        })
 
-interface PlaybackListener {
-    fun onPlaybackStateChanged(station: String, isPlaying: Boolean)
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.cancel(NOTIFICATION_ID)
+    }
 }

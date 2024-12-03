@@ -19,6 +19,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 
 class AudioService : Service() {
+
+    companion object {
+        const val NOTIFICATION_ID = 2024
+    }
+
     private var exoPlayer: ExoPlayer? = null
     private lateinit var notificationManager: NotificationManager
     private val stationStates = mutableMapOf<String, StationState>()
@@ -105,6 +110,7 @@ class AudioService : Service() {
             sendPlaybackStateUpdate()
         }
         stopSelf()
+        //       stopForeground(false)
     }
 
     private fun stopStream(station: String) {
@@ -132,7 +138,7 @@ class AudioService : Service() {
         val stationState = stationStates[station] ?: StationState()
 
         notificationManager.notify(
-            1,
+            NOTIFICATION_ID,
             NotificationCompat.Builder(this, "AUDIO_CHANNEL")
                 .setContentTitle(station)
                 .setContentText(
@@ -171,7 +177,6 @@ class AudioService : Service() {
                         }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
                 )
-                .setAutoCancel(true)
                 .build()
         )
     }
@@ -194,6 +199,7 @@ class AudioService : Service() {
             "UPDATE_NOTIFICATION" -> {
                 updateNotification(station)
             }
+
             "PLAY" -> playStream(station)
             "PAUSE" -> pauseStream(station)
             "STOP" -> stopStream(station)
@@ -202,8 +208,6 @@ class AudioService : Service() {
         return START_NOT_STICKY
     }
 
-
-
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
@@ -211,5 +215,7 @@ class AudioService : Service() {
         exoPlayer?.release()
         exoPlayer = null
         serviceScope.cancel()
+        stopSelf()
+        notificationManager.cancel(NOTIFICATION_ID)
     }
 }
