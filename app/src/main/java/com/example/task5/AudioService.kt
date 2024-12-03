@@ -191,6 +191,9 @@ class AudioService : Service() {
         currentStation = station
 
         when (intent?.action) {
+            "UPDATE_NOTIFICATION" -> {
+                updateNotification(station)
+            }
             "PLAY" -> playStream(station)
             "PAUSE" -> pauseStream(station)
             "STOP" -> stopStream(station)
@@ -198,6 +201,8 @@ class AudioService : Service() {
 
         return START_NOT_STICKY
     }
+
+
 
     override fun onBind(intent: Intent?): IBinder? = null
 

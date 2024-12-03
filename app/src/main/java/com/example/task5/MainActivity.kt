@@ -23,10 +23,7 @@ class MainActivity : AppCompatActivity() {
     )
     private var lastPlayedStation: String? = null
     private lateinit var playbackReceiver: PlaybackReceiver
-
     private lateinit var sharedPreferences: SharedPreferences
-    //  private lateinit var playbackPrefs: PlaybackPreferences
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,8 +32,8 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         sharedPreferences = getSharedPreferences("AudioPrefs", Context.MODE_PRIVATE)
-        //    playbackPrefs = PlaybackPreferences(this)
         stationAdapter = StationAdapter(stations, this)
+
         binding.recyclerView.apply {
             adapter = stationAdapter
             layoutManager = LinearLayoutManager(this@MainActivity)
@@ -51,6 +48,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handlePlayPauseButtonClick() {
+        val isLoading = sharedPreferences.getBoolean("isLoading", false)
+        if (isLoading) return // Блокируем нажатие, если идет загрузка
+
         if (stationAdapter.isAnyStationPlaying()) {
             pauseAnyStation()
         } else {
@@ -59,15 +59,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun updatePlaybackState(isPlaying: Boolean, isLoading: Boolean, station: String?) {
+        stationAdapter.resetCurrentPlayingStation() // Сбрасываем все предыдущие состояния
+
         station?.let {
-            stationAdapter.updateStationState(station, isPlaying, !isLoading)
-        } ?: stationAdapter.resetCurrentPlayingStation()
+            stationAdapter.updateStationState(station, isPlaying, isLoading)
+        }
 
         lastPlayedStation = if (isPlaying) station else lastPlayedStation
         updatePlayPauseButton(isPlaying, isLoading)
-     //   savePlaybackState(isPlaying, isLoading, station)
+        savePlaybackState(isPlaying, isLoading, station)
     }
 
+    private fun savePlaybackState(isPlaying: Boolean, isLoading: Boolean, station: String?) {
+        sharedPreferences.edit().apply {
+            putBoolean("isPlaying", isPlaying)
+            putBoolean("isLoading", isLoading)
+            putString("currentStation", station)
+            apply()
+        }
+    }
 
     private fun updatePlayPauseButton(isPlaying: Boolean, isLoading: Boolean) {
         binding.playPauseButtonMain.apply {
@@ -86,6 +96,7 @@ class MainActivity : AppCompatActivity() {
             action = "PAUSE"
         })
         updatePlaybackState(isPlaying = false, isLoading = false, station = null)
+        savePlaybackState(isPlaying = false, isLoading = false, station = null)
     }
 
     private fun playStation(station: String) {
@@ -94,7 +105,7 @@ class MainActivity : AppCompatActivity() {
             action = "PLAY"
         })
         updatePlaybackState(isPlaying = true, isLoading = false, station = station)
-        //       updatePlaybackState(isPlaying = true, isLoading = true, station = station)
+        updateNotificationFromActivity(station)
     }
 
     override fun onResume() {
@@ -102,13 +113,6 @@ class MainActivity : AppCompatActivity() {
         updateUIFromPreferences()
     }
 
-    //    private fun updateUIFromPreferences() {
-//        updatePlayPauseButton(
-//            sharedPreferences.getBoolean("isPlaying", false),
-//            sharedPreferences.getBoolean("isLoading", false),
-//        )
-//        lastPlayedStation = sharedPreferences.getString("currentStation", null)
-//    }
     private fun updateUIFromPreferences() {
         val isPlaying = sharedPreferences.getBoolean("isPlaying", false)
         val isLoading = sharedPreferences.getBoolean("isLoading", false)
@@ -122,28 +126,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-
-//    private fun savePlaybackState(isPlaying: Boolean, isLoading: Boolean, station: String?) {
-//        sharedPreferences.edit().apply {
-//            putBoolean("isPlaying", isPlaying)
-//            putBoolean("isLoading", isLoading)
-//            putString("currentStation", station)
-//            apply() // Асинхронное сохранение
-//        }
-//    }
-
-    override fun onStart() {
-        super.onStart()
-        registerReceiver(playbackReceiver, IntentFilter("UPDATE_PLAYBACK_STATE"))
+    private fun updateNotificationFromActivity(station: String) {
+        val intent = Intent(this, AudioService::class.java).apply {
+            action = "UPDATE_NOTIFICATION"
+            putExtra("STATION_NAME", station)
+        }
+        startService(intent)
     }
 
-//    override fun onStop() {
-//        super.onStop()
-//        unregisterReceiver(playbackReceiver)
-//    }
 
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(playbackReceiver)
     }
+}
+
+interface PlaybackListener {
+    fun onPlaybackStateChanged(station: String, isPlaying: Boolean)
 }
