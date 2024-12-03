@@ -62,8 +62,9 @@ class StationAdapter(
             binding.stationName.text = station
             binding.playPauseButtonItem.setImageResource(
                 when {
-                    state.isLoading -> R.drawable.ic_music_note
-                    else -> R.drawable.ic_play
+                    state.isLoading && !state.isPlaying -> R.drawable.ic_loading
+                    !state.isLoading && !state.isPlaying -> R.drawable.ic_play
+                    else -> R.drawable.ic_music_note
                 }
             )
             binding.playPauseButtonItem.isEnabled = !state.isLoading
@@ -80,6 +81,14 @@ class StationAdapter(
                             action = if (state.isPlaying) "PAUSE" else "PLAY"
                         }
                     )
+
+                    val sharedPreferences = context.getSharedPreferences("AudioPrefs", Context.MODE_PRIVATE)
+                    sharedPreferences.edit().apply {
+                        putBoolean("isPlaying", !state.isPlaying)
+                        putBoolean("isLoading", state.isLoading)
+                        putString("currentStation", station)
+                        apply()
+                    }
                 }
             }
         }

@@ -4,6 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
@@ -45,11 +46,13 @@ class AudioService : Service() {
                         }
 
                         Player.STATE_BUFFERING -> {
+                            stationStates[currentStation]?.isPlaying = false
                             stationStates[currentStation]?.isLoading = true
                             updateNotification(currentStation.orEmpty())
                         }
 
                         Player.STATE_ENDED, Player.STATE_IDLE -> {
+                            stationStates[currentStation]?.isLoading = false
                             stationStates[currentStation]?.isPlaying = false
                             updateNotification(currentStation.orEmpty())
                             sendPlaybackStateUpdate()
@@ -81,6 +84,15 @@ class AudioService : Service() {
             play()
         }
         currentStation = station
+        saveCurrentStation(station)
+    }
+
+    private fun saveCurrentStation(station: String) {
+        val sharedPreferences = getSharedPreferences("AudioPrefs", Context.MODE_PRIVATE)
+        sharedPreferences.edit().apply {
+            putString("currentStation", station)
+            apply()
+        }
     }
 
     private fun pauseStream(station: String) {
