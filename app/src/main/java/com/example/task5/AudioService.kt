@@ -5,16 +5,20 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
-import android.media.MediaPlayer
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 
 class AudioService : Service() {
-    private lateinit var mediaPlayer: MediaPlayer
+    private var exoPlayer: ExoPlayer? = null
     private lateinit var notificationManager: NotificationManager
     private val stationStates = mutableMapOf<String, StationState>()
     private var currentStation: String? = null
@@ -26,6 +30,43 @@ class AudioService : Service() {
         notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannel()
         stationStates[defaultStation] = StationState()
+
+        exoPlayer = ExoPlayer.Builder(this).build().apply {
+            addListener(object : Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    when (playbackState) {
+                        Player.STATE_READY -> {
+                            stationStates[currentStation]?.let {
+                                it.isPlaying = true
+                                it.isLoading = false
+                            }
+                            updateNotification(currentStation.orEmpty())
+                            sendPlaybackStateUpdate()
+                        }
+
+                        Player.STATE_BUFFERING -> {
+                            stationStates[currentStation]?.isLoading = true
+                            updateNotification(currentStation.orEmpty())
+                        }
+
+                        Player.STATE_ENDED, Player.STATE_IDLE -> {
+                            stationStates[currentStation]?.isPlaying = false
+                            updateNotification(currentStation.orEmpty())
+                            sendPlaybackStateUpdate()
+                        }
+                    }
+                }
+
+                override fun onPlayerError(error: PlaybackException) {
+                    stationStates[currentStation]?.let {
+                        it.isPlaying = false
+                        it.isLoading = false
+                    }
+                    updateNotification(currentStation.orEmpty())
+                    sendPlaybackStateUpdate()
+                }
+            })
+        }
     }
 
     private fun playStream(station: String) {
@@ -33,34 +74,21 @@ class AudioService : Service() {
         stationState.isLoading = true
         updateNotification(station)
 
-        if (!::mediaPlayer.isInitialized) {
-            mediaPlayer = MediaPlayer()
+        exoPlayer?.apply {
+            stop()
+            setMediaItem(MediaItem.fromUri(station))
+            prepare()
+            play()
         }
-
-        mediaPlayer.apply {
-            reset()
-            setDataSource(station)
-            setOnPreparedListener {
-                stationState.isPlaying = true
-                stationState.isLoading = false
-                currentStation = station
-                start()
-                updateNotification(station)
-                sendPlaybackStateUpdate()
-            }
-            setOnCompletionListener {
-                stationState.isPlaying = false
-                updateNotification(station)
-            }
-            prepareAsync()
-        }
+        currentStation = station
     }
 
     private fun pauseStream(station: String) {
         val stationState = stationStates[station] ?: return
-        if (::mediaPlayer.isInitialized && stationState.isPlaying) {
-            mediaPlayer.pause()
+        if (stationState.isPlaying) {
+            exoPlayer?.pause()
             stationState.isPlaying = false
+            stationState.isLoading = false
             updateNotification(station)
             sendPlaybackStateUpdate()
         }
@@ -69,12 +97,13 @@ class AudioService : Service() {
 
     private fun stopStream(station: String) {
         val stationState = stationStates[station] ?: return
-        if (::mediaPlayer.isInitialized) {
-            mediaPlayer.stop()
+        if (stationState.isPlaying) {
+            exoPlayer?.stop()
+            stationState.isPlaying = false
+            stationState.isLoading = false
+            updateNotification(station)
+            sendPlaybackStateUpdate()
         }
-        stationState.isPlaying = false
-        updateNotification(station)
-        sendPlaybackStateUpdate()  // Notify MainActivity about the stop
         stopSelf()
     }
 
@@ -111,10 +140,12 @@ class AudioService : Service() {
                     )
                 )
                 .addAction(
-                    if (stationState.isPlaying) R.drawable.ic_pause else R.drawable.ic_play, // TODO
+                    if (stationState.isPlaying) R.drawable.ic_pause else R.drawable.ic_play,
                     if (stationState.isPlaying) "Pause" else "Play",
                     PendingIntent.getService(
-                        this, 0, Intent(this, AudioService::class.java).apply {
+                        this,
+                        0,
+                        Intent(this, AudioService::class.java).apply {
                             action = if (stationState.isPlaying) "PAUSE" else "PLAY"
                             putExtra("STATION_NAME", station)
                         }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -135,9 +166,11 @@ class AudioService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            notificationManager.createNotificationChannel(NotificationChannel(
-                "AUDIO_CHANNEL", "Audio Playback", NotificationManager.IMPORTANCE_LOW
-            ).apply { description = "Channel for audio playback notifications" })
+            notificationManager.createNotificationChannel(
+                NotificationChannel(
+                    "AUDIO_CHANNEL", "Audio Playback", NotificationManager.IMPORTANCE_LOW
+                ).apply { description = "Channel for audio playback notifications" }
+            )
         }
     }
 
@@ -158,10 +191,8 @@ class AudioService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        if (::mediaPlayer.isInitialized) {
-            mediaPlayer.stop()
-            mediaPlayer.release()
-        }
+        exoPlayer?.release()
+        exoPlayer = null
         serviceScope.cancel()
     }
 }

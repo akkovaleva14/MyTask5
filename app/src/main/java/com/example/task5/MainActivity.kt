@@ -97,8 +97,8 @@ class MainActivity : AppCompatActivity() {
     private fun updateUIFromPreferences() {
         updatePlayPauseButton(
             sharedPreferences.getBoolean("isPlaying", false),
-            isLoading = false
-        ) // isLoading is always false for the initial state
+            sharedPreferences.getBoolean("isLoading", false),
+        )
         lastPlayedStation = sharedPreferences.getString("currentStation", null)
     }
 
