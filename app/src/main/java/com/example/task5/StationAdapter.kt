@@ -18,6 +18,8 @@ class StationAdapter(
         stations.forEach { this[it] = StationState() }
     }
 
+    private var likedStations = mutableSetOf<String>()
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): StationViewHolder {
         return StationViewHolder(
             ItemStationBinding.inflate(
@@ -69,6 +71,10 @@ class StationAdapter(
             )
             binding.playPauseButtonItem.isEnabled = !state.isLoading
 
+            binding.likeButton.setImageResource(
+                if (likedStations.contains(station)) R.drawable.ic_heart_dark else R.drawable.ic_heart
+            )
+
             binding.playPauseButtonItem.setOnClickListener {
                 if (!state.isLoading) {
                     resetCurrentPlayingStation()
@@ -89,6 +95,16 @@ class StationAdapter(
                         putString("currentStation", station)
                         apply()
                     }
+                }
+            }
+
+            binding.likeButton.setOnClickListener {
+                if (likedStations.contains(station)) {
+                    likedStations.remove(station)
+                    binding.likeButton.setImageResource(R.drawable.ic_heart)
+                } else {
+                    likedStations.add(station)
+                    binding.likeButton.setImageResource(R.drawable.ic_heart_dark)
                 }
             }
         }

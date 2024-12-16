@@ -109,8 +109,8 @@ class AudioService : Service() {
             updateNotification(station)
             sendPlaybackStateUpdate()
         }
-        stopSelf()
-        //       stopForeground(false)
+        //stopSelf()
+       // stopForeground(false)
     }
 
     private fun stopStream(station: String) {

@@ -2,7 +2,8 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="horizontal">
+    android:orientation="horizontal"
+    android:padding="4dp">
 
     <TextView
         android:id="@+id/stationName"
@@ -17,6 +18,14 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:src="@drawable/ic_play"
-        android:contentDescription="Play/Pause"/>
+        android:contentDescription="Play/Pause"
+        android:layout_marginEnd="-2dp"/>
 
+    <ImageButton
+        android:id="@+id/likeButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:src="@drawable/ic_heart"
+        android:layout_marginEnd="-2dp"
+        android:contentDescription="Like"/>
 </LinearLayout>
