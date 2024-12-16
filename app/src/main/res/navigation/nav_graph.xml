@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    app:startDestination="@id/authenticationFragment">
+
+    <fragment
+        android:id="@+id/authenticationFragment"
+        android:name="com.example.task5.AuthenticationFragment"
+        tools:layout="@layout/fragment_authentication">
+        <action
+            android:id="@+id/action_authenticationFragment_to_verificationFragment"
+            app:destination="@id/verificationFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/verificationFragment"
+        android:name="com.example.task5.VerificationFragment"
+        tools:layout="@layout/fragment_verification">
+        <argument
+            android:name="verificationId"
+            app:argType="string" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/stationsListFragment"
+        android:name="com.example.task5.StationsListFragment"
+        tools:layout="@layout/fragment_stations_list" >
+        <action
+            android:id="@+id/action_stationsListFragment_to_favoriteStationsFragment"
+            app:destination="@id/favoriteStationsFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/favoriteStationsFragment"
+        android:name="com.example.task5.FavoriteStationsFragment"
+        tools:layout="@layout/fragment_favorite_stations" />
+</navigation>
