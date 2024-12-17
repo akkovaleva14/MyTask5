@@ -6,7 +6,7 @@
 
     <fragment
         android:id="@+id/authenticationFragment"
-        android:name="com.example.task5.AuthenticationFragment"
+        android:name="com.example.task5.presentation.AuthenticationFragment"
         tools:layout="@layout/fragment_authentication">
         <action
             android:id="@+id/action_authenticationFragment_to_verificationFragment"
@@ -15,7 +15,7 @@
 
     <fragment
         android:id="@+id/verificationFragment"
-        android:name="com.example.task5.VerificationFragment"
+        android:name="com.example.task5.presentation.VerificationFragment"
         tools:layout="@layout/fragment_verification">
         <argument
             android:name="verificationId"
@@ -24,7 +24,7 @@
 
     <fragment
         android:id="@+id/stationsListFragment"
-        android:name="com.example.task5.StationsListFragment"
+        android:name="com.example.task5.presentation.StationsListFragment"
         tools:layout="@layout/fragment_stations_list" >
         <action
             android:id="@+id/action_stationsListFragment_to_favoriteStationsFragment"
@@ -33,6 +33,10 @@
 
     <fragment
         android:id="@+id/favoriteStationsFragment"
-        android:name="com.example.task5.FavoriteStationsFragment"
-        tools:layout="@layout/fragment_favorite_stations" />
+        android:name="com.example.task5.presentation.FavoriteStationsFragment"
+        tools:layout="@layout/fragment_favorite_stations" >
+        <action
+            android:id="@+id/action_favoriteStationsFragment_to_stationsListFragment"
+            app:destination="@id/stationsListFragment" />
+    </fragment>
 </navigation>

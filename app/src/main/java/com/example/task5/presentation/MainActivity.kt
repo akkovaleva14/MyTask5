@@ -1,9 +1,10 @@
-package com.example.task5
+package com.example.task5.presentation
 
 import android.content.Context
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.navigation.findNavController
+import com.example.task5.R
 
 class MainActivity : AppCompatActivity() {
 

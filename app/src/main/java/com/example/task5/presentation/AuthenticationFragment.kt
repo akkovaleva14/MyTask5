@@ -1,4 +1,4 @@
-package com.example.task5
+package com.example.task5.presentation
 
 import android.os.Bundle
 import android.text.TextUtils
@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
+import com.example.task5.R
 import com.example.task5.databinding.FragmentAuthenticationBinding
 import com.google.firebase.FirebaseException
 import com.google.firebase.auth.FirebaseAuth

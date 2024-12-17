@@ -1,4 +1,4 @@
-package com.example.task5
+package com.example.task5.presentation
 
 import android.app.NotificationManager
 import android.content.Context
@@ -11,22 +11,34 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.example.task5.AudioService
 import com.example.task5.AudioService.Companion.NOTIFICATION_ID
+import com.example.task5.PlaybackReceiver
+import com.example.task5.R
+import com.example.task5.data.AppDatabase
 import com.example.task5.databinding.FragmentStationsListBinding
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class StationsListFragment : Fragment(), PlaybackStateListener {
     private var _binding: FragmentStationsListBinding? = null
     private val binding get() = _binding!!
     private lateinit var stationAdapter: StationAdapter
-    private val stations = listOf(
-        "https://radio.plaza.one/mp3",
-        "https://hermitage.hostingradio.ru/hermitage128.mp3",
-        "https://radiorecord.hostingradio.ru/sd9096.aacp",
-        "https://radiorecord.hostingradio.ru/christmas96.aacp",
-        "https://radiorecord.hostingradio.ru/beach96.aacp",
-        "https://radiorecord.hostingradio.ru/hypno96.aacp",
-        "https://radiorecord.hostingradio.ru/198096.aacp"
+    private lateinit var database: AppDatabase
+
+    // Map URLs to station names
+    private val stations = mapOf(
+        "https://radio.plaza.one/mp3" to "Plaza Radio",
+        "https://hermitage.hostingradio.ru/hermitage128.mp3" to "Hermitage Radio",
+        "https://radiorecord.hostingradio.ru/sd9096.aacp" to "Record Radio 9096",
+        "https://radiorecord.hostingradio.ru/christmas96.aacp" to "Christmas Radio 96",
+        "https://radiorecord.hostingradio.ru/beach96.aacp" to "Beach Radio 96",
+        "https://radiorecord.hostingradio.ru/hypno96.aacp" to "Hypno Radio 96",
+        "https://radiorecord.hostingradio.ru/198096.aacp" to "Record Radio 198096"
     )
+
     private var lastPlayedStation: String? = null
     private lateinit var playbackReceiver: PlaybackReceiver
     private lateinit var sharedPreferences: SharedPreferences
@@ -36,6 +48,7 @@ class StationsListFragment : Fragment(), PlaybackStateListener {
         savedInstanceState: Bundle?
     ): View {
         _binding = FragmentStationsListBinding.inflate(inflater, container, false)
+        database = AppDatabase.getDatabase(requireContext())
         return binding.root
     }
 
@@ -49,10 +62,22 @@ class StationsListFragment : Fragment(), PlaybackStateListener {
             apply()
         }
 
-        stationAdapter = StationAdapter(stations, requireActivity())
+        // Initialize the adapter with station names
+        stationAdapter = StationAdapter(stations.toList(), requireActivity(), database)
         binding.recyclerView.apply {
             adapter = stationAdapter
             layoutManager = LinearLayoutManager(requireContext())
+        }
+
+        // Load favorite stations from local storage
+        CoroutineScope(Dispatchers.IO).launch {
+            val favoriteStations = database.favoriteStationDao().getAllFavoriteStations()
+            favoriteStations.forEach { station ->
+                stationAdapter.likedStations.add(station.id)
+            }
+            withContext(Dispatchers.Main) {
+                stationAdapter.notifyDataSetChanged()
+            }
         }
 
         binding.playPauseButtonMain.setOnClickListener { handlePlayPauseButtonClick() }
@@ -60,8 +85,7 @@ class StationsListFragment : Fragment(), PlaybackStateListener {
         playbackReceiver = PlaybackReceiver()
         requireActivity().registerReceiver(playbackReceiver, IntentFilter("UPDATE_PLAYBACK_STATE"))
 
-        binding.icFavorite.setOnClickListener {
-            // Переход на FavoriteStationsFragment
+        binding.goToFavButton.setOnClickListener {
             requireActivity().supportFragmentManager.beginTransaction()
                 .replace(R.id.fragment_container, FavoriteStationsFragment())
                 .addToBackStack(null)
@@ -72,11 +96,11 @@ class StationsListFragment : Fragment(), PlaybackStateListener {
     }
 
     private fun handlePlayPauseButtonClick() {
-        if (sharedPreferences.getBoolean("isLoading", false)) return // Блокируем нажатие, если идет загрузка
+        if (sharedPreferences.getBoolean("isLoading", false)) return // Block click if loading
         if (stationAdapter.isAnyStationPlaying()) {
             pauseAnyStation(lastPlayedStation)
         } else {
-            playStation(lastPlayedStation ?: stations.first())
+            playStation(lastPlayedStation ?: stations.keys.first())
         }
     }
 
@@ -109,7 +133,7 @@ class StationsListFragment : Fragment(), PlaybackStateListener {
                     else -> R.drawable.ic_play
                 }
             )
-            isEnabled = !isLoading // Блокировка кнопки во время загрузки
+            isEnabled = !isLoading // Disable button during loading
         }
     }
 
@@ -149,7 +173,7 @@ class StationsListFragment : Fragment(), PlaybackStateListener {
 
         updatePlayPauseButton(isPlaying, isLoading)
 
-        // Обновляем состояние списка станций
+        // Update the state of the station list
         lastPlayedStation?.let { station ->
             stationAdapter.updateStationState(station, isPlaying, isLoading)
         }
