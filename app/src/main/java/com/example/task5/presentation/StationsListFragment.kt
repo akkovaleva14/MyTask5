@@ -22,7 +22,7 @@ import com.example.task5.databinding.FragmentStationsListBinding
 class StationsListFragment : Fragment(), PlaybackStateListener {
     private var _binding: FragmentStationsListBinding? = null
     private val binding get() = _binding!!
-    private lateinit var stationAdapter: StationAdapter
+    private lateinit var stationsAdapter: StationsAdapter
     private lateinit var database: AppDatabase
     private val viewModel: StationsListViewModel by viewModels {
         StationsListViewModelFactory(
@@ -49,20 +49,20 @@ class StationsListFragment : Fragment(), PlaybackStateListener {
         val stations = viewModel.getStations()
 
         // Initialize the adapter with the stations
-        stationAdapter = StationAdapter(stations.toList(), requireActivity(), database)
+        stationsAdapter = StationsAdapter(stations.toList(), requireActivity(), database)
         binding.recyclerView.apply {
-            adapter = stationAdapter
+            adapter = stationsAdapter
             layoutManager = LinearLayoutManager(requireContext())
         }
 
         // Load favorite stations
         viewModel.loadFavoriteStations()
         viewModel.favoriteStations.observe(viewLifecycleOwner, Observer { favoriteStations ->
-            stationAdapter.likedStations.clear() // Очистите старые значения
+            stationsAdapter.likedStations.clear() // Очистите старые значения
             favoriteStations.forEach { station ->
-                stationAdapter.likedStations.add(station.url)
+                stationsAdapter.likedStations.add(station.url)
             }
-            stationAdapter.notifyDataSetChanged() // Обновите адаптер
+            stationsAdapter.notifyDataSetChanged() // Обновите адаптер
         })
 
         // Observing ViewModel LiveData
@@ -75,7 +75,7 @@ class StationsListFragment : Fragment(), PlaybackStateListener {
         })
 
         viewModel.currentStation.observe(viewLifecycleOwner, Observer { station ->
-            stationAdapter.updateStationState(
+            stationsAdapter.updateStationState(
                 station ?: "",
                 viewModel.isPlaying.value ?: false,
                 viewModel.isLoading.value ?: false

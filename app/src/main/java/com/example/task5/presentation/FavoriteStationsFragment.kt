@@ -1,6 +1,7 @@
 package com.example.task5.presentation
 
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -18,6 +19,11 @@ class FavoriteStationsFragment : Fragment() {
     private lateinit var favoriteStationsAdapter: FavoriteStationsAdapter
     private val viewModel: FavoriteStationsViewModel by viewModels {
         FavoriteStationsViewModelFactory(AppDatabase.getDatabase(requireContext()))
+    }
+
+    // Получение экземпляра базы данных
+    private val database: AppDatabase by lazy {
+        AppDatabase.getDatabase(requireContext())
     }
 
     override fun onCreateView(
@@ -49,17 +55,12 @@ class FavoriteStationsFragment : Fragment() {
         favoriteStationsAdapter = FavoriteStationsAdapter(
             favoriteStations,
             onPlayPauseClick = { station ->
-                // Handle play/pause action for individual station
+                // Обработка нажатия кнопки воспроизведения/паузы для отдельной станции
             },
             onLikeClick = { station ->
-                // Удаление радиостанции из избранного через ViewModel
-                viewModel.deleteStation(station.url) { updatedStations ->
-                    favoriteStationsAdapter.updateStations(updatedStations)
-                    // Обновление likedStations в адаптере
-                    favoriteStationsAdapter.updateLikedStations(updatedStations)
-                    updateEmptyStateVisibility(updatedStations.isEmpty())
-                }
-            }
+                // Обработка нажатия кнопки "нравится" для отдельной станции
+            },
+            database // Теперь передаем базу данных
         )
 
         binding.recyclerViewFavoriteStations.apply {

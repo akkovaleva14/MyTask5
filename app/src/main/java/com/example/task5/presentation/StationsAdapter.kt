@@ -19,11 +19,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-class StationAdapter(
+class StationsAdapter(
     private val stations: List<Pair<String, String>>, // List of pairs (URL, Name)
     private val context: Context,
     private val database: AppDatabase
-) : ListAdapter<Pair<String, String>, StationAdapter.StationViewHolder>(StationDiffCallback()) {
+) : ListAdapter<Pair<String, String>, StationsAdapter.StationViewHolder>(StationDiffCallback()) {
 
     private var stationStates = mutableMapOf<String, StationState>().apply {
         stations.forEach { this[it.first] = StationState() }

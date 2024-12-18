@@ -1,26 +1,37 @@
 package com.example.task5.presentation
 
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import com.example.task5.R
+import com.example.task5.data.AppDatabase
 import com.example.task5.data.FavoriteStation
+import com.example.task5.data.removeStationFromFirebase
 import com.example.task5.databinding.ItemStationBinding
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class FavoriteStationsAdapter(
-    private var favoriteStations: List<FavoriteStation>, // Измените на var, чтобы можно было обновлять
+    private var favoriteStations: List<FavoriteStation>,
     private val onPlayPauseClick: (FavoriteStation) -> Unit,
-    private val onLikeClick: (FavoriteStation) -> Unit
+    private val onLikeClick: (FavoriteStation) -> Unit,
+    private val database: AppDatabase // Добавьте параметр для базы данных
 ) : RecyclerView.Adapter<FavoriteStationsAdapter.ViewHolder>() {
 
-    // Добавляем свойство likedStations для отслеживания "нравится" состояния
-    val likedStations = mutableSetOf<String>()
+    private val likedStations = mutableSetOf<String>()
 
-    // ViewHolder to hold the views for each item using View Binding
-    class ViewHolder(private val binding: ItemStationBinding) : RecyclerView.ViewHolder(binding.root) {
-        fun bind(station: FavoriteStation, onPlayPauseClick: (FavoriteStation) -> Unit, onLikeClick: (FavoriteStation) -> Unit, likedStations: Set<String>) {
+    class ViewHolder(private val binding: ItemStationBinding) :
+        RecyclerView.ViewHolder(binding.root) {
+        fun bind(
+            station: FavoriteStation,
+            onPlayPauseClick: (FavoriteStation) -> Unit,
+            onLikeClick: (FavoriteStation) -> Unit,
+            likedStations: Set<String>
+        ) {
             binding.stationName.text = station.name
-
             binding.likeButton.setImageResource(R.drawable.ic_heart_dark)
 
             binding.playPauseButtonItem.setOnClickListener {
@@ -33,38 +44,47 @@ class FavoriteStationsAdapter(
         }
     }
 
-    // Inflates the layout for each item
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val binding = ItemStationBinding.inflate(LayoutInflater.from(parent.context), parent, false)
         return ViewHolder(binding)
     }
 
-    // Binds data to the views in each item
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val station = favoriteStations[position]
-        holder.bind(station, onPlayPauseClick, onLikeClick, likedStations) // Передаем likedStations
+        holder.bind(station, onPlayPauseClick, ::handleLikeClick, likedStations)
     }
 
-    // Returns the number of items in the list
     override fun getItemCount(): Int = favoriteStations.size
 
-    // Метод для обновления списка станций
+    private fun handleLikeClick(station: FavoriteStation) {
+        CoroutineScope(Dispatchers.IO).launch {
+            // Удаление из базы данных
+            database.favoriteStationDao().delete(station.url)
+            val sanitizedUrl = sanitizeStationUrl(station.url)
+            removeStationFromFirebase(sanitizedUrl)
+            Log.d("FavoriteStationsAdapter", "Removed station from favorites: ${station.name}")
+
+            // Обновление списка станций
+            val updatedStations = favoriteStations.toMutableList().apply { remove(station) }
+
+            // Переключение на основной поток для обновления UI
+            withContext(Dispatchers.Main) {
+                updateStations(updatedStations)
+            }
+        }
+    }
+
+
     fun updateStations(updatedStations: List<FavoriteStation>) {
         favoriteStations = updatedStations
-        likedStations.clear() // Очистите likedStations, если необходимо
-        updatedStations.forEach { station ->
-            likedStations.add(station.url) // Обновите likedStations
-        }
-        notifyDataSetChanged() // Уведомите адаптер об изменениях
-    }
-
-    // Метод для обновления состояния "нравится"
-    fun updateLikedStations(updatedStations: List<FavoriteStation>) {
         likedStations.clear()
         updatedStations.forEach { station ->
-            likedStations.add(station.url) // Добавьте URL в likedStations
+            likedStations.add(station.url)
         }
-        notifyDataSetChanged() // Уведомите адаптер об изменениях
+        notifyDataSetChanged()
     }
 
+    private fun sanitizeStationUrl(url: String): String {
+        return url.replace("https://", "").replace("http://", "").replace("/", "_")
+    }
 }
