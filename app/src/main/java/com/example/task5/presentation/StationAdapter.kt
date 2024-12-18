@@ -68,13 +68,18 @@ class StationAdapter(
         val (url, name) = stations[position]
         holder.bind(name, stationStates[url] ?: StationState())
 
+        // Установите состояние кнопки "нравится"
+        holder.binding.likeButton.setImageResource(
+            if (likedStations.contains(url)) R.drawable.ic_heart_dark else R.drawable.ic_heart
+        )
+
         holder.binding.likeButton.setOnClickListener {
             Log.d("StationAdapter", "Like button clicked for station: $name")
             try {
                 if (likedStations.contains(url)) {
                     likedStations.remove(url)
                     holder.binding.likeButton.setImageResource(R.drawable.ic_heart)
-                    // Remove station from local storage and Firebase
+                    // Удаление станции из локального хранилища и Firebase
                     CoroutineScope(Dispatchers.IO).launch {
                         database.favoriteStationDao().delete(url)
                         val sanitizedUrl = sanitizeStationUrl(url)
@@ -84,7 +89,7 @@ class StationAdapter(
                 } else {
                     likedStations.add(url)
                     holder.binding.likeButton.setImageResource(R.drawable.ic_heart_dark)
-                    // Add station to local storage and Firebase
+                    // Добавление станции в локальное хранилище и Firebase
                     val favoriteStation = FavoriteStation(url, name, url)
                     CoroutineScope(Dispatchers.IO).launch {
                         database.favoriteStationDao().insert(favoriteStation)
@@ -97,10 +102,9 @@ class StationAdapter(
                 Log.e("StationAdapter", "Error while updating favorites for station: $name", e)
             }
         }
-
     }
 
-    fun sanitizeStationUrl(url: String): String {
+    private fun sanitizeStationUrl(url: String): String {
         return url.replace("https://", "").replace("http://", "").replace("/", "_")
     }
 

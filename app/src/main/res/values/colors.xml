@@ -4,4 +4,6 @@
     <color name="white">#FFFFFFFF</color>
     <color name="pink">#72FB7BEF</color>
     <color name="purple">#72AC7BFB</color>
+    <color name="blue">#B9868BF4</color>
+    <color name="dark_blue">#3F51B5</color>
 </resources>

@@ -5,21 +5,20 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.task5.R
 import com.example.task5.data.AppDatabase
 import com.example.task5.data.FavoriteStation
 import com.example.task5.databinding.FragmentFavoriteStationsBinding
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class FavoriteStationsFragment : Fragment() {
     private var _binding: FragmentFavoriteStationsBinding? = null
     private val binding get() = _binding!!
     private lateinit var favoriteStationsAdapter: FavoriteStationsAdapter
-    private lateinit var database: AppDatabase
+    private val viewModel: FavoriteStationsViewModel by viewModels {
+        FavoriteStationsViewModelFactory(AppDatabase.getDatabase(requireContext()))
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -39,19 +38,10 @@ class FavoriteStationsFragment : Fragment() {
                 .commit()
         }
 
-        // Initialize the database
-        database = AppDatabase.getDatabase(requireContext())
-
-        // Load favorite stations
-        CoroutineScope(Dispatchers.IO).launch {
-            val favoriteStations = database.favoriteStationDao().getAllFavoriteStations()
-            withContext(Dispatchers.Main) {
-                setupRecyclerView(favoriteStations)
-            }
-        }
-
-        binding.playPauseButtonMain.setOnClickListener {
-            // Handle play/pause action
+        // Загрузка любимых станций через ViewModel
+        viewModel.loadFavoriteStations { favoriteStations ->
+            setupRecyclerView(favoriteStations)
+            updateEmptyStateVisibility(favoriteStations.isEmpty())
         }
     }
 
@@ -62,7 +52,13 @@ class FavoriteStationsFragment : Fragment() {
                 // Handle play/pause action for individual station
             },
             onLikeClick = { station ->
-                // Handle like/unlike action for individual station
+                // Удаление радиостанции из избранного через ViewModel
+                viewModel.deleteStation(station.url) { updatedStations ->
+                    favoriteStationsAdapter.updateStations(updatedStations)
+                    // Обновление likedStations в адаптере
+                    favoriteStationsAdapter.updateLikedStations(updatedStations)
+                    updateEmptyStateVisibility(updatedStations.isEmpty())
+                }
             }
         )
 
@@ -70,6 +66,13 @@ class FavoriteStationsFragment : Fragment() {
             layoutManager = LinearLayoutManager(requireContext())
             adapter = favoriteStationsAdapter
         }
+
+        updateEmptyStateVisibility(favoriteStations.isEmpty())
+    }
+
+    private fun updateEmptyStateVisibility(isEmpty: Boolean) {
+        binding.emptyStateImage.visibility = if (isEmpty) View.VISIBLE else View.GONE
+        binding.recyclerViewFavoriteStations.visibility = if (isEmpty) View.GONE else View.VISIBLE
     }
 
     override fun onDestroyView() {

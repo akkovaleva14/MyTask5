@@ -4,12 +4,13 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.SharedPreferences
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.Observer
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.task5.AudioService
 import com.example.task5.AudioService.Companion.NOTIFICATION_ID
@@ -17,31 +18,20 @@ import com.example.task5.PlaybackReceiver
 import com.example.task5.R
 import com.example.task5.data.AppDatabase
 import com.example.task5.databinding.FragmentStationsListBinding
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class StationsListFragment : Fragment(), PlaybackStateListener {
     private var _binding: FragmentStationsListBinding? = null
     private val binding get() = _binding!!
     private lateinit var stationAdapter: StationAdapter
     private lateinit var database: AppDatabase
+    private val viewModel: StationsListViewModel by viewModels {
+        StationsListViewModelFactory(
+            requireContext(),
+            database
+        )
+    }
 
-    // Map URLs to station names
-    private val stations = mapOf(
-        "https://radio.plaza.one/mp3" to "Plaza Radio",
-        "https://hermitage.hostingradio.ru/hermitage128.mp3" to "Hermitage Radio",
-        "https://radiorecord.hostingradio.ru/sd9096.aacp" to "Record Radio 9096",
-        "https://radiorecord.hostingradio.ru/christmas96.aacp" to "Christmas Radio 96",
-        "https://radiorecord.hostingradio.ru/beach96.aacp" to "Beach Radio 96",
-        "https://radiorecord.hostingradio.ru/hypno96.aacp" to "Hypno Radio 96",
-        "https://radiorecord.hostingradio.ru/198096.aacp" to "Record Radio 198096"
-    )
-
-    private var lastPlayedStation: String? = null
     private lateinit var playbackReceiver: PlaybackReceiver
-    private lateinit var sharedPreferences: SharedPreferences
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -55,30 +45,42 @@ class StationsListFragment : Fragment(), PlaybackStateListener {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        sharedPreferences = requireActivity().getSharedPreferences("AudioPrefs", Context.MODE_PRIVATE)
-        sharedPreferences.edit().apply {
-            putBoolean("isPlaying", false)
-            putBoolean("isLoading", false)
-            apply()
-        }
+        // Retrieve stations from ViewModel
+        val stations = viewModel.getStations()
 
-        // Initialize the adapter with station names
+        // Initialize the adapter with the stations
         stationAdapter = StationAdapter(stations.toList(), requireActivity(), database)
         binding.recyclerView.apply {
             adapter = stationAdapter
             layoutManager = LinearLayoutManager(requireContext())
         }
 
-        // Load favorite stations from local storage
-        CoroutineScope(Dispatchers.IO).launch {
-            val favoriteStations = database.favoriteStationDao().getAllFavoriteStations()
+        // Load favorite stations
+        viewModel.loadFavoriteStations()
+        viewModel.favoriteStations.observe(viewLifecycleOwner, Observer { favoriteStations ->
+            stationAdapter.likedStations.clear() // Очистите старые значения
             favoriteStations.forEach { station ->
-                stationAdapter.likedStations.add(station.id)
+                stationAdapter.likedStations.add(station.url)
             }
-            withContext(Dispatchers.Main) {
-                stationAdapter.notifyDataSetChanged()
-            }
-        }
+            stationAdapter.notifyDataSetChanged() // Обновите адаптер
+        })
+
+        // Observing ViewModel LiveData
+        viewModel.isPlaying.observe(viewLifecycleOwner, Observer { isPlaying ->
+            updatePlayPauseButton(isPlaying, viewModel.isLoading.value ?: false)
+        })
+
+        viewModel.isLoading.observe(viewLifecycleOwner, Observer { isLoading ->
+            updatePlayPauseButton(viewModel.isPlaying.value ?: false, isLoading)
+        })
+
+        viewModel.currentStation.observe(viewLifecycleOwner, Observer { station ->
+            stationAdapter.updateStationState(
+                station ?: "",
+                viewModel.isPlaying.value ?: false,
+                viewModel.isLoading.value ?: false
+            )
+        })
 
         binding.playPauseButtonMain.setOnClickListener { handlePlayPauseButtonClick() }
 
@@ -91,97 +93,52 @@ class StationsListFragment : Fragment(), PlaybackStateListener {
                 .addToBackStack(null)
                 .commit()
         }
-
-        updateUIFromPreferences()
     }
 
     private fun handlePlayPauseButtonClick() {
-        if (sharedPreferences.getBoolean("isLoading", false)) return // Block click if loading
-        if (stationAdapter.isAnyStationPlaying()) {
-            pauseAnyStation(lastPlayedStation)
+        // Toggle playback state
+        val isCurrentlyPlaying = viewModel.isPlaying.value ?: false
+        if (isCurrentlyPlaying) {
+            // Pause the audio
+            requireActivity().startService(
+                Intent(
+                    requireActivity(),
+                    AudioService::class.java
+                ).apply {
+                    action = "PAUSE"
+                })
         } else {
-            playStation(lastPlayedStation ?: stations.keys.first())
+            // Play the audio
+            requireActivity().startService(
+                Intent(
+                    requireActivity(),
+                    AudioService::class.java
+                ).apply {
+                    action = "PLAY"
+                    putExtra(
+                        "stationUrl",
+                        viewModel.currentStation.value
+                    ) // Pass the current station URL
+                })
         }
     }
 
     override fun updatePlaybackState(isPlaying: Boolean, isLoading: Boolean, station: String?) {
-        stationAdapter.resetCurrentPlayingStation()
-
-        station?.let {
-            stationAdapter.updateStationState(station, isPlaying, isLoading)
-        }
-
-        lastPlayedStation = if (isPlaying) station else lastPlayedStation
-        updatePlayPauseButton(isPlaying, isLoading)
-        savePlaybackState(isPlaying, isLoading, station)
-    }
-
-    private fun savePlaybackState(isPlaying: Boolean, isLoading: Boolean, station: String?) {
-        sharedPreferences.edit().apply {
-            putBoolean("isPlaying", isPlaying)
-            putBoolean("isLoading", isLoading)
-            putString("currentStation", station)
-            apply()
-        }
+        viewModel.savePlaybackState(isPlaying, isLoading, station)
+        // Additional UI updates if needed
     }
 
     private fun updatePlayPauseButton(isPlaying: Boolean, isLoading: Boolean) {
         binding.playPauseButtonMain.apply {
-            setImageResource(
-                when {
-                    isPlaying -> R.drawable.ic_pause
-                    else -> R.drawable.ic_play
-                }
-            )
-            isEnabled = !isLoading // Disable button during loading
-        }
-    }
-
-    private fun pauseAnyStation(station: String?) {
-        requireActivity().startService(Intent(requireActivity(), AudioService::class.java).apply {
-            action = "PAUSE"
-        })
-        updatePlaybackState(isPlaying = false, isLoading = false, station)
-        savePlaybackState(isPlaying = false, isLoading = false, station)
-    }
-
-    private fun playStation(station: String) {
-        requireActivity().startService(Intent(requireActivity(), AudioService::class.java).apply {
-            putExtra("STATION_NAME", station)
-            action = "PLAY"
-        })
-        updatePlaybackState(isPlaying = true, isLoading = false, station = station)
-        updateNotificationFromActivity(station)
-    }
-
-    private fun updateNotificationFromActivity(station: String) {
-        requireActivity().startService(Intent(requireActivity(), AudioService::class.java).apply {
-            action = "UPDATE_NOTIFICATION"
-            putExtra("STATION_NAME", station)
-        })
-    }
-
-    override fun onResume() {
-        super.onResume()
-        updateUIFromPreferences()
-    }
-
-    private fun updateUIFromPreferences() {
-        val isPlaying = sharedPreferences.getBoolean("isPlaying", false)
-        val isLoading = sharedPreferences.getBoolean("isLoading", false)
-        lastPlayedStation = sharedPreferences.getString("currentStation", null)
-
-        updatePlayPauseButton(isPlaying, isLoading)
-
-        // Update the state of the station list
-        lastPlayedStation?.let { station ->
-            stationAdapter.updateStationState(station, isPlaying, isLoading)
+            setImageResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play)
+            isEnabled = !isLoading
         }
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
         requireActivity().unregisterReceiver(playbackReceiver)
+        _binding = null
     }
 
     override fun onDestroy() {
@@ -190,7 +147,8 @@ class StationsListFragment : Fragment(), PlaybackStateListener {
             action = "STOP"
         })
 
-        val notificationManager = requireActivity().getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager =
+            requireActivity().getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.cancel(NOTIFICATION_ID)
     }
 }
