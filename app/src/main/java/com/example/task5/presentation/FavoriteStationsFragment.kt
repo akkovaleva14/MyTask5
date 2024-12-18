@@ -21,11 +21,6 @@ class FavoriteStationsFragment : Fragment() {
         FavoriteStationsViewModelFactory(AppDatabase.getDatabase(requireContext()))
     }
 
-    // Получение экземпляра базы данных
-    private val database: AppDatabase by lazy {
-        AppDatabase.getDatabase(requireContext())
-    }
-
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -60,7 +55,11 @@ class FavoriteStationsFragment : Fragment() {
             onLikeClick = { station ->
                 // Обработка нажатия кнопки "нравится" для отдельной станции
             },
-            database // Теперь передаем базу данных
+            viewModel, // Передаем ViewModel в адаптер
+            onStationsUpdated = { updatedStations ->
+                // Проверяем, пустой ли список после обновления
+                updateEmptyStateVisibility(updatedStations.isEmpty())
+            }
         )
 
         binding.recyclerViewFavoriteStations.apply {
@@ -70,6 +69,7 @@ class FavoriteStationsFragment : Fragment() {
 
         updateEmptyStateVisibility(favoriteStations.isEmpty())
     }
+
 
     private fun updateEmptyStateVisibility(isEmpty: Boolean) {
         binding.emptyStateImage.visibility = if (isEmpty) View.VISIBLE else View.GONE

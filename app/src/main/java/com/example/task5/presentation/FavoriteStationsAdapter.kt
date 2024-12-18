@@ -18,7 +18,8 @@ class FavoriteStationsAdapter(
     private var favoriteStations: List<FavoriteStation>,
     private val onPlayPauseClick: (FavoriteStation) -> Unit,
     private val onLikeClick: (FavoriteStation) -> Unit,
-    private val database: AppDatabase // Добавьте параметр для базы данных
+    private val viewModel: FavoriteStationsViewModel,
+    private val onStationsUpdated: (List<FavoriteStation>) -> Unit // Новый callback
 ) : RecyclerView.Adapter<FavoriteStationsAdapter.ViewHolder>() {
 
     private val likedStations = mutableSetOf<String>()
@@ -57,23 +58,12 @@ class FavoriteStationsAdapter(
     override fun getItemCount(): Int = favoriteStations.size
 
     private fun handleLikeClick(station: FavoriteStation) {
-        CoroutineScope(Dispatchers.IO).launch {
-            // Удаление из базы данных
-            database.favoriteStationDao().delete(station.url)
-            val sanitizedUrl = sanitizeStationUrl(station.url)
-            removeStationFromFirebase(sanitizedUrl)
-            Log.d("FavoriteStationsAdapter", "Removed station from favorites: ${station.name}")
-
-            // Обновление списка станций
-            val updatedStations = favoriteStations.toMutableList().apply { remove(station) }
-
-            // Переключение на основной поток для обновления UI
-            withContext(Dispatchers.Main) {
-                updateStations(updatedStations)
-            }
+        viewModel.deleteStation(station.url) { updatedStations ->
+            updateStations(updatedStations)
+            // Вызываем callback для обновления состояния пустого списка
+            onStationsUpdated(updatedStations)
         }
     }
-
 
     fun updateStations(updatedStations: List<FavoriteStation>) {
         favoriteStations = updatedStations
@@ -82,9 +72,5 @@ class FavoriteStationsAdapter(
             likedStations.add(station.url)
         }
         notifyDataSetChanged()
-    }
-
-    private fun sanitizeStationUrl(url: String): String {
-        return url.replace("https://", "").replace("http://", "").replace("/", "_")
     }
 }
