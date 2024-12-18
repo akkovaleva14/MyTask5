@@ -1,13 +1,10 @@
 package com.example.task5.presentation
 
 import android.view.LayoutInflater
-import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageButton
-import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
-import com.example.task5.R
 import com.example.task5.data.FavoriteStation
+import com.example.task5.databinding.ItemStationBinding
 
 class FavoriteStationsAdapter(
     private val favoriteStations: List<FavoriteStation>,
@@ -15,34 +12,33 @@ class FavoriteStationsAdapter(
     private val onLikeClick: (FavoriteStation) -> Unit
 ) : RecyclerView.Adapter<FavoriteStationsAdapter.ViewHolder>() {
 
-    // ViewHolder to hold the views for each item
-    class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        val stationName: TextView = view.findViewById(R.id.stationName)
-        val playPauseButton: ImageButton = view.findViewById(R.id.playPauseButtonItem)
-        val likeButton: ImageButton = view.findViewById(R.id.likeButton)
+    // ViewHolder to hold the views for each item using View Binding
+    class ViewHolder(private val binding: ItemStationBinding) : RecyclerView.ViewHolder(binding.root) {
+        fun bind(station: FavoriteStation, onPlayPauseClick: (FavoriteStation) -> Unit, onLikeClick: (FavoriteStation) -> Unit) {
+            binding.stationName.text = station.name
+
+            // Handle play/pause button click
+            binding.playPauseButtonItem.setOnClickListener {
+                onPlayPauseClick(station)
+            }
+
+            // Handle like button click
+            binding.likeButton.setOnClickListener {
+                onLikeClick(station)
+            }
+        }
     }
 
     // Inflates the layout for each item
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val view = LayoutInflater.from(parent.context)
-            .inflate(R.layout.item_station, parent, false)
-        return ViewHolder(view)
+        val binding = ItemStationBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+        return ViewHolder(binding)
     }
 
     // Binds data to the views in each item
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val station = favoriteStations[position]
-        holder.stationName.text = station.name
-
-        // Handle play/pause button click
-        holder.playPauseButton.setOnClickListener {
-            onPlayPauseClick(station)
-        }
-
-        // Handle like button click
-        holder.likeButton.setOnClickListener {
-            onLikeClick(station)
-        }
+        holder.bind(station, onPlayPauseClick, onLikeClick)
     }
 
     // Returns the number of items in the list

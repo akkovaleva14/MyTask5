@@ -32,9 +32,6 @@ class FavoriteStationsFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-//        binding.backButton.setOnClickListener {
-//            findNavController().navigate(R.id.action_favoriteStationsFragment_to_stationsListFragment)
-//        }
         binding.backButton.setOnClickListener {
             requireActivity().supportFragmentManager.beginTransaction()
                 .replace(R.id.fragment_container, StationsListFragment())
