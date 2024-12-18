@@ -5,7 +5,7 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "favorite_stations")
 data class FavoriteStation(
-    @PrimaryKey val id: String,
-    val name: String,
-    val url: String
+    @PrimaryKey val id: String = "",
+    val name: String = "",
+    val url: String = ""
 )

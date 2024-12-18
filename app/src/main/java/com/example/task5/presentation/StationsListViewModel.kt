@@ -2,12 +2,14 @@ package com.example.task5.presentation
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.task5.data.AppDatabase
 import com.example.task5.data.FavoriteStation
+import com.example.task5.data.getFavoriteStationsFromFirebase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -64,6 +66,27 @@ class StationsListViewModel(private val context: Context, private val database: 
             _favoriteStations.postValue(favoriteStations)
         }
     }
+
+    fun loadFavoriteStationsFromFirebase() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // Загружаем избранные станции из Firebase
+                val favoriteStations = getFavoriteStationsFromFirebase()
+                Log.d("StationsListViewModel", "Favorite stations from Firebase: $favoriteStations")
+
+                // Сохраняем станции в локальную базу данных
+                favoriteStations.forEach { station ->
+                    database.favoriteStationDao().insert(station)
+                }
+
+                // Обновляем LiveData
+                _favoriteStations.postValue(favoriteStations)
+            } catch (e: Exception) {
+                Log.e("StationsListViewModel", "Error loading favorite stations from Firebase", e)
+            }
+        }
+    }
+
 
     // Function to get the list of stations
     fun getStations(): Map<String, String> {

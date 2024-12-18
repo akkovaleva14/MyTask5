@@ -20,31 +20,26 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class StationsAdapter(
-    private val stations: List<Pair<String, String>>, // List of pairs (URL, Name)
     private val context: Context,
     private val database: AppDatabase
 ) : ListAdapter<Pair<String, String>, StationsAdapter.StationViewHolder>(StationDiffCallback()) {
 
-    private var stationStates = mutableMapOf<String, StationState>().apply {
-        stations.forEach { this[it.first] = StationState() }
-    }
-
+    private var stationStates = mutableMapOf<String, StationState>()
     var likedStations = mutableSetOf<String>()
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): StationViewHolder {
-        return StationViewHolder(
-            ItemStationBinding.inflate(
-                LayoutInflater.from(parent.context),
-                parent,
-                false
-            )
+        val binding = ItemStationBinding.inflate(
+            LayoutInflater.from(parent.context),
+            parent,
+            false
         )
+        return StationViewHolder(binding)
     }
 
-    override fun getItemCount(): Int = stations.size
-
-    fun isAnyStationPlaying(): Boolean {
-        return stationStates.values.any { it.isPlaying }
+    override fun onBindViewHolder(holder: StationViewHolder, position: Int) {
+        val (url, name) = getItem(position)
+        val state = stationStates[url] ?: StationState()
+        holder.bind(name, url, state)
     }
 
     fun updateStationState(station: String, isPlaying: Boolean, isLoading: Boolean) {
@@ -52,7 +47,7 @@ class StationsAdapter(
             this.isPlaying = isPlaying
             this.isLoading = isLoading
         }
-        notifyItemChanged(stations.indexOfFirst { it.first == station })
+        notifyItemChanged(currentList.indexOfFirst { it.first == station })
     }
 
     fun resetCurrentPlayingStation() {
@@ -60,46 +55,65 @@ class StationsAdapter(
         currentStation?.let {
             it.value.isPlaying = false
             it.value.isLoading = false
-            notifyItemChanged(stations.indexOfFirst { station -> station.first == it.key })
+            notifyItemChanged(currentList.indexOfFirst { station -> station.first == it.key })
         }
     }
 
-    override fun onBindViewHolder(holder: StationViewHolder, position: Int) {
-        val (url, name) = stations[position]
-        holder.bind(name, stationStates[url] ?: StationState())
+    inner class StationViewHolder(private val binding: ItemStationBinding) :
+        RecyclerView.ViewHolder(binding.root) {
 
-        // Установите состояние кнопки "нравится"
-        holder.binding.likeButton.setImageResource(
-            if (likedStations.contains(url)) R.drawable.ic_heart_dark else R.drawable.ic_heart
-        )
+        fun bind(name: String, url: String, state: StationState) {
+            binding.stationName.text = name
 
-        holder.binding.likeButton.setOnClickListener {
-            Log.d("StationAdapter", "Like button clicked for station: $name")
-            try {
+            // Play/Pause Button State
+            binding.playPauseButtonItem.setImageResource(
+                when {
+                    state.isLoading -> R.drawable.ic_loading
+                    state.isPlaying -> R.drawable.ic_music_note
+                    else -> R.drawable.ic_play
+                }
+            )
+            binding.playPauseButtonItem.isEnabled = !state.isLoading
+
+            // Like Button State
+            binding.likeButton.setImageResource(
+                if (likedStations.contains(url)) R.drawable.ic_heart_dark else R.drawable.ic_heart
+            )
+
+            // Play/Pause Button Click Listener
+            binding.playPauseButtonItem.setOnClickListener {
+                if (!state.isLoading) {
+                    resetCurrentPlayingStation()
+                    stationStates[url]?.isLoading = true
+                    notifyItemChanged(adapterPosition)
+
+                    context.startService(
+                        Intent(context, AudioService::class.java).apply {
+                            putExtra("STATION_URL", url)
+                            action = if (state.isPlaying) "PAUSE" else "PLAY"
+                        }
+                    )
+                }
+            }
+
+            // Like Button Click Listener
+            binding.likeButton.setOnClickListener {
                 if (likedStations.contains(url)) {
                     likedStations.remove(url)
-                    holder.binding.likeButton.setImageResource(R.drawable.ic_heart)
-                    // Удаление станции из локального хранилища и Firebase
+                    binding.likeButton.setImageResource(R.drawable.ic_heart)
                     CoroutineScope(Dispatchers.IO).launch {
                         database.favoriteStationDao().delete(url)
-                        val sanitizedUrl = sanitizeStationUrl(url)
-                        removeStationFromFirebase(sanitizedUrl)
-                        Log.d("StationAdapter", "Removed station from favorites: $name")
+                        removeStationFromFirebase(sanitizeStationUrl(url))
                     }
                 } else {
                     likedStations.add(url)
-                    holder.binding.likeButton.setImageResource(R.drawable.ic_heart_dark)
-                    // Добавление станции в локальное хранилище и Firebase
+                    binding.likeButton.setImageResource(R.drawable.ic_heart_dark)
                     val favoriteStation = FavoriteStation(url, name, url)
                     CoroutineScope(Dispatchers.IO).launch {
                         database.favoriteStationDao().insert(favoriteStation)
-                        val sanitizedUrl = sanitizeStationUrl(url)
-                        addStationToFirebase(favoriteStation.copy(id = sanitizedUrl))
-                        Log.d("StationAdapter", "Added station to favorites: $name")
+                        addStationToFirebase(favoriteStation.copy(id = sanitizeStationUrl(url)))
                     }
                 }
-            } catch (e: Exception) {
-                Log.e("StationAdapter", "Error while updating favorites for station: $name", e)
             }
         }
     }
@@ -108,57 +122,12 @@ class StationsAdapter(
         return url.replace("https://", "").replace("http://", "").replace("/", "_")
     }
 
-
-    inner class StationViewHolder(val binding: ItemStationBinding) :
-        RecyclerView.ViewHolder(binding.root) {
-
-        fun bind(name: String, state: StationState) {
-            binding.stationName.text = name
-            binding.playPauseButtonItem.setImageResource(
-                when {
-                    state.isLoading && !state.isPlaying -> R.drawable.ic_loading
-                    !state.isLoading && !state.isPlaying -> R.drawable.ic_play
-                    else -> R.drawable.ic_music_note
-                }
-            )
-            binding.playPauseButtonItem.isEnabled = !state.isLoading
-
-            binding.likeButton.setImageResource(
-                if (likedStations.contains(name)) R.drawable.ic_heart_dark else R.drawable.ic_heart
-            )
-
-            binding.playPauseButtonItem.setOnClickListener {
-                if (!state.isLoading) {
-                    resetCurrentPlayingStation()
-                    stationStates[stations[adapterPosition].first]?.isLoading = true
-                    notifyItemChanged(adapterPosition)
-
-                    context.startService(
-                        Intent(context, AudioService::class.java).apply {
-                            putExtra("STATION_NAME", stations[adapterPosition].first)
-                            action = if (state.isPlaying) "PAUSE" else "PLAY"
-                        }
-                    )
-
-                    val sharedPreferences =
-                        context.getSharedPreferences("AudioPrefs", Context.MODE_PRIVATE)
-                    sharedPreferences.edit().apply {
-                        putBoolean("isPlaying", !state.isPlaying)
-                        putBoolean("isLoading", state.isLoading)
-                        putString("currentStation", stations[adapterPosition].first)
-                        apply()
-                    }
-                }
-            }
-        }
-    }
-
     class StationDiffCallback : DiffUtil.ItemCallback<Pair<String, String>>() {
         override fun areItemsTheSame(
             oldItem: Pair<String, String>,
             newItem: Pair<String, String>
         ): Boolean {
-            return oldItem.first == newItem.first
+            return oldItem.first === newItem.first
         }
 
         override fun areContentsTheSame(

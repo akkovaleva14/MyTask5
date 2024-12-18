@@ -50,14 +50,14 @@ class FavoriteStationsFragment : Fragment() {
         favoriteStationsAdapter = FavoriteStationsAdapter(
             favoriteStations,
             onPlayPauseClick = { station ->
-                // Обработка нажатия кнопки воспроизведения/паузы для отдельной станции
+                Log.d("FavoriteStationsFragment", "Play/Pause button clicked for station: ${station.name}")
             },
             onLikeClick = { station ->
-                // Обработка нажатия кнопки "нравится" для отдельной станции
+                Log.d("FavoriteStationsFragment", "Like button clicked for station: ${station.name}")
             },
             viewModel, // Передаем ViewModel в адаптер
             onStationsUpdated = { updatedStations ->
-                // Проверяем, пустой ли список после обновления
+                Log.d("FavoriteStationsFragment", "Stations list updated. New size: ${updatedStations.size}")
                 updateEmptyStateVisibility(updatedStations.isEmpty())
             }
         )

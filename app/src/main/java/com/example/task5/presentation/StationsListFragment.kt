@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -42,27 +43,31 @@ class StationsListFragment : Fragment(), PlaybackStateListener {
         return binding.root
     }
 
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // Retrieve stations from ViewModel
-        val stations = viewModel.getStations()
-
-        // Initialize the adapter with the stations
-        stationsAdapter = StationsAdapter(stations.toList(), requireActivity(), database)
+        // Initialize the adapter
+        stationsAdapter = StationsAdapter(requireContext(), database)
         binding.recyclerView.apply {
             adapter = stationsAdapter
             layoutManager = LinearLayoutManager(requireContext())
         }
 
-        // Load favorite stations
-        viewModel.loadFavoriteStations()
+        // Retrieve stations from ViewModel and set them in the adapter
+        val stations = viewModel.getStations()
+        stationsAdapter.submitList(stations.toList())
+
+        // Загружаем избранные станции из Firebase
+        viewModel.loadFavoriteStationsFromFirebase()
         viewModel.favoriteStations.observe(viewLifecycleOwner, Observer { favoriteStations ->
-            stationsAdapter.likedStations.clear() // Очистите старые значения
+            Log.d("StationsListFragment", "Observed favorite stations: $favoriteStations")
+            stationsAdapter.likedStations.clear()
             favoriteStations.forEach { station ->
+                Log.d("StationsListFragment", "Adding station to likedStations: ${station.url}")
                 stationsAdapter.likedStations.add(station.url)
             }
-            stationsAdapter.notifyDataSetChanged() // Обновите адаптер
+            stationsAdapter.notifyDataSetChanged()
         })
 
         // Observing ViewModel LiveData
@@ -94,6 +99,7 @@ class StationsListFragment : Fragment(), PlaybackStateListener {
                 .commit()
         }
     }
+
 
     private fun handlePlayPauseButtonClick() {
         // Toggle playback state

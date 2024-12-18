@@ -58,12 +58,16 @@ class FavoriteStationsAdapter(
     override fun getItemCount(): Int = favoriteStations.size
 
     private fun handleLikeClick(station: FavoriteStation) {
+        Log.d("FavoriteStationsAdapter", "Like button clicked for station: ${station.name} (URL: ${station.url})")
+
         viewModel.deleteStation(station.url) { updatedStations ->
+            Log.d("FavoriteStationsAdapter", "Station deleted and updated list received. Updated list size: ${updatedStations.size}")
             updateStations(updatedStations)
             // Вызываем callback для обновления состояния пустого списка
             onStationsUpdated(updatedStations)
         }
     }
+
 
     fun updateStations(updatedStations: List<FavoriteStation>) {
         favoriteStations = updatedStations
